@@ -1,0 +1,52 @@
+using UnityEngine;
+
+[RequireComponent(typeof(PlatformerMotor2D))]
+public class PlayerController : MonoBehaviour
+{
+    private PlatformerMotor2D _motor;
+
+    private void Awake()
+    {
+        _motor = GetComponent<PlatformerMotor2D>();
+    }
+
+    private void OnEnable()
+    {
+        if (EventBus.Instance != null)
+        {
+            EventBus.Instance.Subscribe<MoveInputEvent>(OnMoveInput);
+            EventBus.Instance.Subscribe<JumpInputEvent>(OnJumpInput);
+        }
+    }
+
+    private void OnDisable()
+    {
+        if (EventBus.Instance != null)
+        {
+            EventBus.Instance.Unsubscribe<MoveInputEvent>(OnMoveInput);
+            EventBus.Instance.Unsubscribe<JumpInputEvent>(OnJumpInput);
+        }
+    }
+
+    private void OnMoveInput(MoveInputEvent evt)
+    {
+        _motor.SetHorizontalInput(evt.Direction.x);
+
+        // Jump는 이제 JumpInput이 담당
+        //if (evt.Direction.y > 0.5f)
+        //{
+        //    _motor.RequestJump();
+        //}
+        //else if (evt.Direction.y <= 0f)
+        //{
+        //    _motor.CancelJump();
+        //}
+    }
+
+    private void OnJumpInput(JumpInputEvent evt)
+    {
+        Debug.Log("Jump Input Action");
+        if (evt.IsStarted) _motor.RequestJump();
+        else _motor.CancelJump();
+    }
+}

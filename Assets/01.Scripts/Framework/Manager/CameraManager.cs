@@ -67,7 +67,6 @@ public class CameraManager : Singleton<CameraManager>
 
         if (EventBus.Instance != null)
         {
-            EventBus.Instance.Subscribe<RightClickEvent>(HandleRightClick);
             EventBus.Instance.Subscribe<ScrollEvent>(HandleScroll);
         }
     }
@@ -76,7 +75,6 @@ public class CameraManager : Singleton<CameraManager>
     {
         if (EventBus.Instance == null) return;
 
-        EventBus.Instance.Unsubscribe<RightClickEvent>(HandleRightClick);
         EventBus.Instance.Unsubscribe<ScrollEvent>(HandleScroll);
     }
 
@@ -110,14 +108,6 @@ public class CameraManager : Singleton<CameraManager>
 
         Vector3 nextPos = transform.localPosition + move;
         transform.localPosition = ClampCameraPosition(nextPos, _mainCamera.orthographicSize);
-    }
-
-    private void HandleRightClick(RightClickEvent e)
-    {
-        if (InputReader.Instance != null && InputReader.Instance.IsPointerOverUI && e.IsStarted) return;
-        _isDragging = e.IsStarted;
-        if (e.IsStarted)
-            TryPublishTutorialCameraManipulated();
     }
 
     private void HandleScroll(ScrollEvent e)

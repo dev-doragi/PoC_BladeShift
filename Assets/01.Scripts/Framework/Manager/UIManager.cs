@@ -30,7 +30,6 @@ public class UIManager : Singleton<UIManager>
         {
             EventBus.Instance.Subscribe<GameStateChangedEvent>(OnGameStateChanged);
             EventBus.Instance.Subscribe<InGameStateChangedEvent>(OnInGameStateChanged);
-            EventBus.Instance.Subscribe<TutorialCompletedEvent>(OnTutorialCompleted);
         }
     }
 
@@ -40,7 +39,6 @@ public class UIManager : Singleton<UIManager>
         {
             EventBus.Instance.Unsubscribe<GameStateChangedEvent>(OnGameStateChanged);
             EventBus.Instance.Unsubscribe<InGameStateChangedEvent>(OnInGameStateChanged);
-            EventBus.Instance.Unsubscribe<TutorialCompletedEvent>(OnTutorialCompleted);
         }
     }
 
@@ -168,15 +166,6 @@ public class UIManager : Singleton<UIManager>
         {
             SceneLoader.Instance.GoToStageSelect();
         }
-    }
-
-    private void OnTutorialCompleted(TutorialCompletedEvent evt)
-    {
-        HideAllPanels();
-        if (_resumeButton != null) _resumeButton.SetActive(false);
-
-        Time.timeScale = 0f;
-        if (InputReader.Instance != null) InputReader.Instance.SetInputBlocked(true);
     }
 
     protected override void OnBootstrap()

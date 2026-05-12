@@ -8,7 +8,7 @@ public struct DamageData
     public float Damage;
     public TeamType AttackerTeam;
     public Vector2 HitPoint;
-    public bool IsPiercing;
+    public bool IsPiercing; // 무기가 관통 상태(Thrust)인지 여부
 }
 
 public interface IDamageable
@@ -17,11 +17,6 @@ public interface IDamageable
     /// 대상의 소속 팀입니다.
     /// </summary>
     TeamType Team { get; }
-
-    /// <summary>
-    /// 대상의 분류입니다.
-    /// </summary>
-    UnitCategory Category { get; }
 
     /// <summary>
     /// 대상의 사망 여부입니다.

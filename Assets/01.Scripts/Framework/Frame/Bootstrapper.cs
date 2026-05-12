@@ -56,7 +56,7 @@ public class Bootstrapper : MonoBehaviour
         if (GameFlowManager.Instance != null) GameFlowManager.Instance.BootstrapIfNeeded();
 
         // Phase 3: World
-        if (CameraManager.Instance != null) CameraManager.Instance.BootstrapIfNeeded();
+        //if (CameraManager.Instance != null) CameraManager.Instance.BootstrapIfNeeded();
         if (PauseManager.Instance != null) PauseManager.Instance.BootstrapIfNeeded();
 
         // Phase 4: Presentation
