@@ -904,7 +904,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 453a8df749292c84ab65600d3ab46633, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
-  _controlRadius: 7
+  _controlRadius: 12
   _showControlRadiusGizmo: 1
 --- !u!114 &1089678682
 MonoBehaviour:
@@ -1660,7 +1660,7 @@ MonoBehaviour:
   _slashDuration: 0.25
   _thrustDamage: 30
   _thrustRadius: 1.2
-  _thrustSpeed: 20
+  _thrustSpeed: 60
   _minReturnSpeed: 10
   _maxReturnSpeed: 30
   _returnStopDistance: 1.5
