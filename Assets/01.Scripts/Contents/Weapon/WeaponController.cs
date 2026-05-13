@@ -23,6 +23,7 @@ public class WeaponController : MonoBehaviour
     private WeaponSensor _sensor;
     private WeaponView _view;
     private HashSet<IDamageable> _hitTargets = new HashSet<IDamageable>();
+    private List<EnemyBase> _capturedEnemies = new List<EnemyBase>();
     private PlayerController _playerController;
     private float _controlRadius;
 
@@ -139,18 +140,7 @@ public class WeaponController : MonoBehaviour
         }
 
 
-        bool hasEnemy = false;
-        if (_currentState == WeaponState.Pinned)
-        {
-            for (int i = 0; i < transform.childCount; i++)
-            {
-                if (transform.GetChild(i).TryGetComponent<EnemyBase>(out _))
-                {
-                    hasEnemy = true;
-                    break;
-                }
-            }
-        }
+        bool hasEnemy = _capturedEnemies.Count > 0;
 
 
         bool canHover = _currentState == WeaponState.Controlled || 
@@ -222,21 +212,14 @@ public class WeaponController : MonoBehaviour
 
         if (_currentState == WeaponState.Pinned && evt.IsStarted)
         {
+            if (!_sensor.IsPlayerInRange(transform.position)) return;
 
-            bool hasVictim = false;
-            for (int i = 0; i < transform.childCount; i++)
-            {
-                if (transform.GetChild(i).TryGetComponent<EnemyBase>(out _))
-                {
-                    hasVictim = true;
-                    break;
-                }
-            }
+            bool hasVictim = _capturedEnemies.Count > 0;
 
 
             if (hasVictim)
             {
-                StartCoroutine(ExecuteSpinFinisher());
+                ExecuteSpinFinisher();
             }
             else
             {
@@ -265,7 +248,16 @@ public class WeaponController : MonoBehaviour
         {
             if (_currentState == WeaponState.Pinned)
             {
-                UnpinAndReturn();
+                if (!_sensor.IsPlayerInRange(transform.position)) return;
+
+                if (_capturedEnemies.Count > 0)
+                {
+                    ExecuteSpinFinisher();
+                }
+                else
+                {
+                    UnpinAndReturn();
+                }
                 return;
             }
 
@@ -314,11 +306,16 @@ public class WeaponController : MonoBehaviour
             if (targetTransform != null)
             {
                 targetTransform.SetParent(transform); 
+                if (targetTransform.TryGetComponent<EnemyBase>(out var enemy))
+                {
+                    if (!_capturedEnemies.Contains(enemy))
+                    {
+                        _capturedEnemies.Add(enemy);
+                    }
+                }
                 if (targetTransform.TryGetComponent<Rigidbody2D>(out var eb)) eb.bodyType = RigidbodyType2D.Kinematic;
             }
-            _isAttacking = false;
-            ChangeState(WeaponState.Pinned);
-            return true;
+            return false;
         }, 
         hitTransform => 
         {
@@ -329,6 +326,14 @@ public class WeaponController : MonoBehaviour
 
     private void UnpinAndReturn()
     {
+        foreach (var enemy in _capturedEnemies)
+        {
+            if (enemy != null)
+            {
+                enemy.transform.SetParent(null);
+            }
+        }
+        _capturedEnemies.Clear();
         transform.SetParent(null);
         transform.localScale = _originalScale;
         transform.rotation = Quaternion.Euler(0f, 0f, transform.eulerAngles.z);
@@ -355,7 +360,6 @@ public class WeaponController : MonoBehaviour
     {
         if (_isTimeSlowed) return;
         _isTimeSlowed = true;
-        // 직접 수정 대신 이벤트 발행 (시간은 TimeManager가 관리)
         EventBus.Instance?.Publish(new SlowMotionEvent { TargetTimeScale = _slowMotionScale, Duration = 999f });
     }
 
@@ -363,7 +367,6 @@ public class WeaponController : MonoBehaviour
     {
         if (!_isTimeSlowed) return;
         _isTimeSlowed = false;
-        // 직접 1.0으로 돌리지 말고 TimeManager에게 초기화 요청
         TimeManager.Instance?.ResetTime();
     }
 
@@ -372,66 +375,42 @@ public class WeaponController : MonoBehaviour
         if (_view == null) _view = GetComponent<WeaponView>();
         if (_view != null) _view.DrawGizmos();
     }
-    private IEnumerator ExecuteSpinFinisher()
+    private void ExecuteSpinFinisher()
     {
         _isAttacking = true;
         EventBus.Instance?.Publish(new HitStopEvent { Duration = 0.2f });
-        yield return new WaitForSecondsRealtime(0.2f);
-
-        Transform victim = null;
-        for (int i = 0; i < transform.childCount; i++)
-        {
-            if (transform.GetChild(i).TryGetComponent<EnemyBase>(out _))
-            {
-                victim = transform.GetChild(i);
-                break;
-            }
-        }
-
         Vector2 pivot = _sensor.GetMouseWorldPosition();
-        Vector2 startPos = transform.position;
-        float radius = Vector2.Distance(pivot, startPos);
-        radius = Mathf.Max(radius, _combat.SlashRadius * 1.8f); 
-        float startAngle = Mathf.Atan2(startPos.y - pivot.y, startPos.x - pivot.x) * Mathf.Rad2Deg;
-
-        EventBus.Instance?.Publish(new CameraShakeEvent { Intensity = ShakeIntensity.Strong });
-
-        float duration = 0.35f;
-        float elapsed = 0f;
-        bool hasReleased = false;
-
-        while (elapsed < duration)
+        float radius = Vector2.Distance(pivot, transform.position);
+        radius = Mathf.Max(radius, _combat.SlashRadius * 1.8f);
+        List<Transform> pinnedTargets = new List<Transform>(_capturedEnemies.Count);
+        foreach (var enemy in _capturedEnemies)
         {
-            elapsed += Time.deltaTime;
-            float t = elapsed / duration;
-            float curve = 1f - Mathf.Pow(1f - t, 3f);
-
-            float currentAngle = startAngle + (360f * curve); 
-            Vector2 offset = new Vector2(Mathf.Cos(currentAngle * Mathf.Deg2Rad), Mathf.Sin(currentAngle * Mathf.Deg2Rad)) * radius;
-
-            transform.position = pivot + offset;
-            transform.rotation = Quaternion.Euler(0, 0, currentAngle + 90f);
-
-            if (!hasReleased && t > 0.3f)
+            if (enemy != null)
             {
-                hasReleased = true;
-                _combat.PerformSpinFinisher(transform.position, victim);
-                if (victim != null)
-                {
-                    victim.SetParent(null);
-                }
+                pinnedTargets.Add(enemy.transform);
             }
-
-            yield return null;
         }
 
-        if (!hasReleased)
-        {
-            _combat.PerformSpinFinisher(transform.position, victim);
-            if (victim != null) victim.SetParent(null);
-        }
-
-        _isAttacking = false;
-        ChangeState(WeaponState.Controlled);
+        _movement.ExecuteOrbitFinisher(
+            pivot,
+            radius,
+            0.35f,
+            () =>
+            {
+                _combat.PerformSpinFinisher(transform.position, pinnedTargets);
+                foreach (var enemy in _capturedEnemies)
+                {
+                    if (enemy != null)
+                    {
+                        enemy.transform.SetParent(null);
+                    }
+                }
+                _capturedEnemies.Clear();
+            },
+            () =>
+            {
+                _isAttacking = false;
+                ChangeState(WeaponState.Controlled);
+            });
     }
 }

@@ -12,6 +12,7 @@ public abstract class EnemyBase : MonoBehaviour, IDamageable
 
     protected Color _originalColor;
     protected Coroutine _blinkRoutine;
+    protected bool _hasHitWallAfterDeath = false;
 
     public virtual TeamType Team => TeamType.Enemy;
     public virtual bool IsDead => _currentHealth <= 0f;
@@ -49,7 +50,7 @@ public abstract class EnemyBase : MonoBehaviour, IDamageable
         if (EventBus.Instance != null)
         {
             EventBus.Instance.Publish(new CameraShakeEvent { Intensity = ShakeIntensity.Weak });
-            EventBus.Instance.Publish(new HitStopEvent { Duration = 0.07f });
+            //EventBus.Instance.Publish(new HitStopEvent { Duration = 0.3f });
         }
 
         if (_blinkRoutine == null && gameObject.activeInHierarchy)
@@ -63,6 +64,8 @@ public abstract class EnemyBase : MonoBehaviour, IDamageable
 
     protected virtual void Die(Vector2 knockbackForce)
     {
+        _hasHitWallAfterDeath = false;
+
         int weaponLayer = LayerMask.NameToLayer("Weapon");
         for (int i = transform.childCount - 1; i >= 0; i--)
         {
@@ -144,6 +147,23 @@ public abstract class EnemyBase : MonoBehaviour, IDamageable
 
         transform.rotation = Quaternion.identity;
         _blinkRoutine = null;
+    }
+
+    protected virtual void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (IsDead && !_hasHitWallAfterDeath && _rb != null && _rb.bodyType == RigidbodyType2D.Dynamic)
+        {
+            if (collision.relativeVelocity.sqrMagnitude > 25f)
+            {
+                _hasHitWallAfterDeath = true;
+
+                if (EventBus.Instance != null)
+                {
+                    EventBus.Instance.Publish(new CameraShakeEvent { Intensity = ShakeIntensity.Medium });
+                    EventBus.Instance.Publish(new HitStopEvent { Duration = 0.35f });
+                }
+            }
+        }
     }
 
     protected virtual IEnumerator BlinkRoutine()

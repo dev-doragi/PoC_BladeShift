@@ -8,6 +8,8 @@ public class TimeManager : Singleton<TimeManager>
     private float _slowMoTimer;
     private float _slowMoTargetTimeScale = 1f;
 
+    [SerializeField, Range(0f, 0.1f)] private float _hitStopTimeScale = 0.2f;
+
     protected override void OnBootstrap()
     {
         _isSystemPaused = IsSystemPausedState(GameManager.Instance != null ? GameManager.Instance.CurrentState : GameState.Ready);
@@ -84,7 +86,7 @@ public class TimeManager : Singleton<TimeManager>
         }
         else if (_hitStopTimer > 0f)
         {
-            newTimeScale = 0f;
+            newTimeScale = _hitStopTimeScale;
         }
         else if (_slowMoTimer > 0f)
         {

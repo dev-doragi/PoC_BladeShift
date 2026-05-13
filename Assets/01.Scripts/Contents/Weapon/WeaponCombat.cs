@@ -113,38 +113,37 @@ public class WeaponCombat : MonoBehaviour
             }
         }
     }
-    public void PerformSpinFinisher(Vector3 position, Transform pinnedTarget)
+    public void PerformSpinFinisher(Vector3 position, List<Transform> pinnedTargets)
     {
-        // pinnedTarget: 즉사 + 무기→적 방향 10배 넉백
-        if (pinnedTarget != null && pinnedTarget.TryGetComponent<EnemyBase>(out var enemy) && !enemy.IsDead)
-        {
-            Vector2 dir = ((Vector2)pinnedTarget.position - (Vector2)position).normalized;
-            enemy.TakeDamage(new DamageData
-            {
-                Damage = 9999f,
-                AttackerTeam = TeamType.Player,
-                HitPoint = pinnedTarget.position,
-                KnockbackForce = dir * _knockbackPower * 10f,
-                IsPiercing = true
-            });
-        }
-
-        // 주변 7f 반경 적: 방사형 넉백
         float radius = 7f;
         Collider2D[] hits = Physics2D.OverlapCircleAll(position, radius, _enemyLayer);
         foreach (var col in hits)
         {
-            if (!col.TryGetComponent<EnemyBase>(out var other) || other.IsDead || col.transform == pinnedTarget)
+            if (!col.TryGetComponent<EnemyBase>(out var other) || other.IsDead)
                 continue;
             Vector2 dir = ((Vector2)col.transform.position - (Vector2)position).normalized;
-            other.TakeDamage(new DamageData
+            if (pinnedTargets != null && pinnedTargets.Contains(col.transform))
             {
-                Damage = _slashDamage,
-                AttackerTeam = TeamType.Player,
-                HitPoint = col.ClosestPoint(position),
-                KnockbackForce = dir * _knockbackPower * 5f,
-                IsPiercing = false
-            });
+                other.TakeDamage(new DamageData
+                {
+                    Damage = 9999f,
+                    AttackerTeam = TeamType.Player,
+                    HitPoint = col.ClosestPoint(position),
+                    KnockbackForce = dir * _knockbackPower * 10f,
+                    IsPiercing = true
+                });
+            }
+            else
+            {
+                other.TakeDamage(new DamageData
+                {
+                    Damage = _slashDamage,
+                    AttackerTeam = TeamType.Player,
+                    HitPoint = col.ClosestPoint(position),
+                    KnockbackForce = dir * _knockbackPower * 5f,
+                    IsPiercing = false
+                });
+            }
         }
     }
 }

@@ -73,6 +73,11 @@ public class WeaponMovement : MonoBehaviour
         StartCoroutine(PinFlightRoutine(direction, speed, enemyMask, wallMask, onCheckTarget, onPinned));
     }
 
+    public void ExecuteOrbitFinisher(Vector2 pivot, float radius, float duration, Action onReleasePoint, Action onComplete)
+    {
+        StartCoroutine(OrbitRoutine(pivot, radius, duration, onReleasePoint, onComplete));
+    }
+
     public void StopFollow()
     {
         _currentVelocity = Vector2.zero;
@@ -165,6 +170,47 @@ public class WeaponMovement : MonoBehaviour
         }
 
         onReturnComplete?.Invoke(true);
+    }
+
+    private IEnumerator OrbitRoutine(Vector2 pivot, float radius, float duration, Action onReleasePoint, Action onComplete)
+    {
+        if (_rb == null)
+        {
+            onComplete?.Invoke();
+            yield break;
+        }
+
+        Vector2 startPos = _rb.position;
+        float startAngle = Mathf.Atan2(startPos.y - pivot.y, startPos.x - pivot.x) * Mathf.Rad2Deg;
+        float elapsed = 0f;
+        bool hasReleased = false;
+
+        while (elapsed < duration)
+        {
+            yield return new WaitForFixedUpdate();
+
+            elapsed += Time.fixedDeltaTime;
+            float t = Mathf.Clamp01(elapsed / Mathf.Max(0.0001f, duration));
+            float curve = 1f - Mathf.Pow(1f - t, 3f);
+            float currentAngle = startAngle + (360f * curve);
+            Vector2 offset = new Vector2(Mathf.Cos(currentAngle * Mathf.Deg2Rad), Mathf.Sin(currentAngle * Mathf.Deg2Rad)) * radius;
+
+            _rb.MovePosition(pivot + offset);
+            _rb.MoveRotation(currentAngle + 90f);
+
+            if (!hasReleased && t > 0.3f)
+            {
+                hasReleased = true;
+                onReleasePoint?.Invoke();
+            }
+        }
+
+        if (!hasReleased)
+        {
+            onReleasePoint?.Invoke();
+        }
+
+        onComplete?.Invoke();
     }
 
     public void TransferVelocityToPhysics()
