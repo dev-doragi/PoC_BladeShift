@@ -1648,6 +1648,9 @@ MonoBehaviour:
   _enemyLayer:
     serializedVersion: 2
     m_Bits: 512
+  _projectileLayer:
+    serializedVersion: 2
+    m_Bits: 2048
   _knockbackPower: 15
   _slashDamage: 5
   _slashRadius: 1.5

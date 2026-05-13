@@ -136,6 +136,7 @@ public class WeaponController : MonoBehaviour
         if (_currentState == WeaponState.Slashing)
         {
             _combat.TryTickSpinDamage(transform.position, transform.eulerAngles.z);
+            _combat.DefendProjectiles(transform.position);
             _movement.ApplySpinRotation(_combat.SpinSpeed);
         }
 

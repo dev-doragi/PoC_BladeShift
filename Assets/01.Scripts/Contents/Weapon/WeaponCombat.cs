@@ -4,6 +4,7 @@ using UnityEngine;
 public class WeaponCombat : MonoBehaviour
 {
     [SerializeField] private LayerMask _enemyLayer;
+    [SerializeField] private LayerMask _projectileLayer;
     [SerializeField] private float _knockbackPower = 15f;
     [SerializeField] private float _slashDamage = 15f;
     [SerializeField] private float _slashRadius = 3.5f;
@@ -47,6 +48,27 @@ public class WeaponCombat : MonoBehaviour
 
         PerformSlashDamage(position, _slashRadius, _slashDamage, angleZ);
         _lastTickTime = Time.time;
+    }
+
+    public void DefendProjectiles(Vector3 position)
+    {
+        float radius = _slashRadius * 1.2f;
+        Collider2D[] hits = Physics2D.OverlapCircleAll(position, radius, _projectileLayer);
+        if (hits == null || hits.Length == 0) return;
+
+        HashSet<GameObject> despawned = new HashSet<GameObject>();
+        foreach (var col in hits)
+        {
+            if (col == null) continue;
+
+            GameObject projectile = col.gameObject;
+            if (!despawned.Add(projectile)) continue;
+
+            if (PoolManager.Instance != null)
+                PoolManager.Instance.Despawn(projectile);
+            else
+                Object.Destroy(projectile);
+        }
     }
 
     public void ResetTickTimer()
