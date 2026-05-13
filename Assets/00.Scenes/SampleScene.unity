@@ -1654,20 +1654,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WeaponController
   _playerTransform: {fileID: 1089678679}
-  _followSmoothTime: 0.12
-  _slashDamage: 15
-  _slashRadius: 2
-  _slashDuration: 0.25
-  _thrustDamage: 30
-  _thrustRadius: 1.2
-  _thrustSpeed: 60
-  _minReturnSpeed: 10
-  _maxReturnSpeed: 30
-  _returnStopDistance: 1.5
   _slowMotionScale: 0.2
-  _enemyLayer:
-    serializedVersion: 2
-    m_Bits: 512
   _wallAndEnvironmentLayer:
     serializedVersion: 2
     m_Bits: 128
@@ -1757,6 +1744,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WeaponMovement
   _weaponRadius: 0.73
   _skinWidth: 0.05
+  _followSmoothTime: 0.1
+  _spinFollowSmoothTime: 0.4
+  _minReturnSpeed: 10
+  _maxReturnSpeed: 30
+  _returnStopDistance: 0.5
 --- !u!114 &2068518549
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1772,6 +1764,13 @@ MonoBehaviour:
   _enemyLayer:
     serializedVersion: 2
     m_Bits: 512
+  _slashDamage: 15
+  _slashRadius: 3.5
+  _tickDamageInterval: 0.2
+  _pinDamage: 30
+  _pinRadius: 1.2
+  _spinSpeed: 2160
+  _pinSpeed: 120
 --- !u!1 &2069730400
 GameObject:
   m_ObjectHideFlags: 0

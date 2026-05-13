@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -11,21 +10,8 @@ public class WeaponController : MonoBehaviour
     [Header("1. Dual-Radius Settings")]
     [SerializeField] private Transform _playerTransform;
 
-    [Header("2. Follow Settings")]
-    [SerializeField] private float _followSmoothTime = 0.1f;
-
-    [Header("3. Combat Settings")]
-    [SerializeField] private float _slashDamage = 15f;
-    [SerializeField] private float _slashRadius = 3.5f;
-    [SerializeField] private float _slashDuration = 0.25f;
-    [SerializeField] private float _thrustDamage = 30f;
-    [SerializeField] private float _thrustRadius = 1.2f;
-    [SerializeField] private float _thrustSpeed = 20f;
-    [SerializeField] private float _minReturnSpeed = 10f;
-    [SerializeField] private float _maxReturnSpeed = 30f;
-    [SerializeField] private float _returnStopDistance = 0.5f;
+    [Header("2. Combat Settings")]
     [SerializeField] private float _slowMotionScale = 0.2f;
-    [SerializeField] private LayerMask _enemyLayer;
     [SerializeField] private LayerMask _wallAndEnvironmentLayer;
 
     private Rigidbody2D _rb;
@@ -42,6 +28,7 @@ public class WeaponController : MonoBehaviour
     private bool _isAttacking = false;
     private bool _isThrustAiming = false;
     private bool _isTimeSlowed = false;
+    private Vector3 _originalScale;
     private Vector2 _fixedAimPos;
     private Vector2 _mouseStartPos;
     private Camera _mainCamera;
@@ -55,6 +42,7 @@ public class WeaponController : MonoBehaviour
         _sensor = GetComponent<WeaponSensor>();
         _view = GetComponent<WeaponView>();
         _mainCamera = Camera.main;
+        _originalScale = transform.localScale;
 
         if (_playerTransform == null)
         {
@@ -80,8 +68,7 @@ public class WeaponController : MonoBehaviour
         _controlRadius = _playerController.ControlRadius;
 
         _sensor.Configure(_playerTransform, _mainCamera, _controlRadius, 1.0f, 1.5f, 0f);
-        _combat.Configure(_enemyLayer);
-        _view.Configure(_sensor.GetPlayerTransform(), _controlRadius, 0f, 0f, _slashRadius);
+        _view.Configure(_sensor.GetPlayerTransform(), _controlRadius, 0f, 0f, _combat.SlashRadius);
         _movement.CacheRigidbody(_rb);
 
         ChangeState(WeaponState.Grounded);
@@ -143,17 +130,15 @@ public class WeaponController : MonoBehaviour
             return;
         }
 
-        if (_isAttacking && _currentState == WeaponState.Thrusting)
+        if (_currentState == WeaponState.Slashing)
         {
-            _combat.PerformThrustDamage(_rb.position, _thrustRadius, _thrustDamage, _hitTargets);
+            _combat.TryTickSpinDamage(transform.position, transform.eulerAngles.z);
+            _movement.ApplySpinRotation(_combat.SpinSpeed);
         }
 
-        bool isMobileState = _currentState == WeaponState.Controlled || _currentState == WeaponState.Slashing;
-        bool isThrusting = _currentState == WeaponState.Thrusting;
-
-        if (isMobileState && !isThrusting && !_isThrustAiming)
+        if ((_currentState == WeaponState.Controlled || _currentState == WeaponState.Slashing) && !_isThrustAiming)
         {
-            _movement.FollowMouseHover(_sensor.GetClampedTargetPosition(_wallAndEnvironmentLayer), _followSmoothTime, _wallAndEnvironmentLayer);
+            _movement.HandleHoverMovement(_sensor.GetClampedTargetPosition(_wallAndEnvironmentLayer), _currentState == WeaponState.Slashing, _wallAndEnvironmentLayer);
         }
     }
 
@@ -202,37 +187,32 @@ public class WeaponController : MonoBehaviour
     private void OnPrimaryAttack(PrimaryAttackEvent evt)
     {
         if (_isThrustAiming) return;
-        if (_currentState != WeaponState.Controlled || !evt.IsStarted || _isAttacking) return;
-        StartCoroutine(SlashRoutine());
-    }
-
-    private IEnumerator SlashRoutine()
-    {
-        _isAttacking = true;
-        ChangeState(WeaponState.Slashing);
-        _combat.PerformSlashDamage(transform.position, _slashRadius, _slashDamage, transform.eulerAngles.z);
-
-        float elapsed = 0f;
-        float startAngle = transform.eulerAngles.z;
-        while (elapsed < _slashDuration)
+        if (evt.IsStarted)
         {
-            elapsed += Time.deltaTime;
-            float t = Mathf.Clamp01(elapsed / _slashDuration);
-            _view.SetRotationZ(startAngle + (360f * t));
-            yield return null;
-        }
-        _view.SetRotationZ(startAngle + 360f);
+            if (_currentState != WeaponState.Controlled || _isAttacking) return;
 
-        if (_currentState != WeaponState.Grounded) ChangeState(WeaponState.Controlled);
+            _isAttacking = true;
+            _combat.ResetTickTimer();
+            ChangeState(WeaponState.Slashing);
+            return;
+        }
+
         _isAttacking = false;
+        if (_currentState == WeaponState.Slashing) ChangeState(WeaponState.Controlled);
     }
 
     private void OnSecondaryAttack(SecondaryAttackEvent evt)
     {
-        if (_currentState != WeaponState.Controlled || _isAttacking) return;
-
         if (evt.IsStarted)
         {
+            if (_currentState == WeaponState.Pinned)
+            {
+                UnpinAndReturn();
+                return;
+            }
+
+            if (_currentState != WeaponState.Controlled || _isAttacking) return;
+
             _fixedAimPos = transform.position;
             _mouseStartPos = _sensor.GetMouseWorldPosition();
             _isThrustAiming = true;
@@ -241,10 +221,13 @@ public class WeaponController : MonoBehaviour
         }
         else
         {
+            if (!_isThrustAiming || _currentState == WeaponState.Returning) return;
+
+            _isThrustAiming = false;
+
             Vector2 mouseWorldPos = _sensor.GetMouseWorldPosition();
             float dragDistance = Vector2.Distance(_mouseStartPos, mouseWorldPos);
 
-            _isThrustAiming = false;
             _view.HideTrajectory();
             ResetTimeScale();
 
@@ -255,37 +238,46 @@ public class WeaponController : MonoBehaviour
             }
 
             Vector2 direction = (mouseWorldPos - _fixedAimPos).normalized;
-            StartThrustSequence(direction);
+            StartPinSequence(direction);
         }
     }
 
-    private void StartThrustSequence(Vector2 direction)
+    private void StartPinSequence(Vector2 direction)
     {
-        ChangeState(WeaponState.Thrusting);
+        _isThrustAiming = false;
+        _view.HideTrajectory();
+        ResetTimeScale();
+        ChangeState(WeaponState.PinningFlight);
         _isAttacking = true;
-        _hitTargets.Clear();
+        _movement.ExecutePinFlight(direction, _combat.PinSpeed, _wallAndEnvironmentLayer, hitTransform =>
+        {
+            if (hitTransform != null && hitTransform.TryGetComponent<IDamageable>(out _))
+            {
+                transform.SetParent(hitTransform);
+            }
+            _isAttacking = false;
+            ChangeState(WeaponState.Pinned);
+        });
+    }
 
-        _movement.ExecuteThrust(
-            direction,
-            _thrustSpeed,
-            _wallAndEnvironmentLayer,
-            pos => !_sensor.IsPlayerInRange(pos),
-            StartReturnSequence);
+    private void UnpinAndReturn()
+    {
+        transform.SetParent(null);
+        transform.localScale = _originalScale;
+        transform.rotation = Quaternion.Euler(0f, 0f, transform.eulerAngles.z);
+        StartReturnSequence();
     }
 
     private void StartReturnSequence()
     {
         _hitTargets.Clear();
+        ChangeState(WeaponState.Returning);
 
         _movement.ExecuteReturn(
             _sensor.GetMouseWorldPosition,
-            _minReturnSpeed,
-            _maxReturnSpeed,
             _controlRadius,
-            _returnStopDistance,
-            _wallAndEnvironmentLayer,
             (currentPos, mousePos) => _sensor.IsMouseHovering(currentPos, mousePos),
-            () =>
+            isSuccess =>
             {
                 _isAttacking = false;
                 ChangeState(WeaponState.Controlled);

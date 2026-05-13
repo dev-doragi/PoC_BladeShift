@@ -10,6 +10,11 @@ public class WeaponMovement : MonoBehaviour
     private const float DefaultFollowMaxSpeed = 100f;
     [SerializeField] private float _weaponRadius = 0.3f;
     [SerializeField] private float _skinWidth = 0.05f;
+    [SerializeField] private float _followSmoothTime = 0.1f;
+    [SerializeField] private float _spinFollowSmoothTime = 0.4f;
+    [SerializeField] private float _minReturnSpeed = 10f;
+    [SerializeField] private float _maxReturnSpeed = 30f;
+    [SerializeField] private float _returnStopDistance = 0.5f;
 
     public float WeaponRadius => _weaponRadius;
 
@@ -50,79 +55,71 @@ public class WeaponMovement : MonoBehaviour
         _rb.MovePosition(idealNextPos);
     }
 
+    public void HandleHoverMovement(Vector2 targetPos, bool isSpinning, LayerMask wallMask)
+    {
+        float smoothTime = isSpinning ? _spinFollowSmoothTime : _followSmoothTime;
+        FollowMouseHover(targetPos, smoothTime, wallMask);
+    }
+
+    public void ApplySpinRotation(float spinSpeed)
+    {
+        if (_rb == null) return;
+
+        _rb.MoveRotation(_rb.rotation + (spinSpeed * Time.fixedDeltaTime));
+    }
+
+    public void ExecutePinFlight(Vector2 direction, float speed, LayerMask targetMask, Action<Transform> onPinned)
+    {
+        StartCoroutine(PinFlightRoutine(direction, speed, targetMask, onPinned));
+    }
+
     public void StopFollow()
     {
         _currentVelocity = Vector2.zero;
     }
 
-    public void MoveThrust(Vector2 moveStep)
+    public void ExecuteReturn(Func<Vector2> getTargetPos, float controlRadius, Func<Vector2, Vector2, bool> checkIntercept, Action<bool> onReturnComplete)
     {
-        if (_rb == null) return;
-
-        _rb.MovePosition(_rb.position + moveStep);
-        float deltaTime = Time.inFixedTimeStep ? Time.fixedDeltaTime : Time.deltaTime;
-        if (deltaTime > 0f)
-        {
-            _currentVelocity = moveStep / deltaTime;
-        }
+        StartCoroutine(ReturnRoutine(getTargetPos, _minReturnSpeed, _maxReturnSpeed, controlRadius, _returnStopDistance, checkIntercept, onReturnComplete));
     }
 
-    public void ExecuteThrust(Vector2 direction, float speed, LayerMask wallMask, Func<Vector2, bool> isOutOfRange, Action onThrustEnd)
-    {
-        StartCoroutine(ThrustRoutine(direction, speed, wallMask, isOutOfRange, onThrustEnd));
-    }
-
-    public void ExecuteReturn(Func<Vector2> getTargetPos, float minSpeed, float maxSpeed, float slowRadius, float stopDistance, LayerMask wallMask, Func<Vector2, Vector2, bool> checkIntercept, Action onReturnComplete)
-    {
-        StartCoroutine(ReturnRoutine(getTargetPos, minSpeed, maxSpeed, slowRadius, stopDistance, wallMask, checkIntercept, onReturnComplete));
-    }
-
-    private IEnumerator ThrustRoutine(Vector2 direction, float speed, LayerMask wallMask, Func<Vector2, bool> isOutOfRange, Action onThrustEnd)
+    private IEnumerator PinFlightRoutine(Vector2 direction, float speed, LayerMask targetMask, Action<Transform> onPinned)
     {
         if (_rb == null) yield break;
 
-        Vector2 thrustDirection = direction.sqrMagnitude > 0f ? direction.normalized : Vector2.right;
-        int wallLayerMask = wallMask.value;
+        Vector2 flightDirection = direction.sqrMagnitude > 0f ? direction.normalized : Vector2.right;
+        int targetLayerMask = targetMask.value;
 
         while (true)
         {
             yield return new WaitForFixedUpdate();
 
             Vector2 currentPos = _rb.position;
-
-            if (isOutOfRange != null && isOutOfRange(currentPos))
-            {
-                break;
-            }
-
             float moveDistance = speed * Time.fixedDeltaTime;
             if (moveDistance <= 0f)
             {
                 break;
             }
 
-            RaycastHit2D hit = Physics2D.CircleCast(currentPos, _weaponRadius, thrustDirection, moveDistance, wallLayerMask);
-            if (hit.collider != null && hit.distance > 0.001f)
+            RaycastHit2D hit = Physics2D.Raycast(currentPos, flightDirection, moveDistance, targetLayerMask);
+            if (hit.collider != null)
             {
-                _rb.MovePosition(hit.centroid + (hit.normal * _skinWidth));
-                break;
+                _rb.MovePosition(hit.point);
+                onPinned?.Invoke(hit.transform);
+                yield break;
             }
 
-            MoveThrust(thrustDirection * moveDistance);
+            _rb.MovePosition(currentPos + (flightDirection * moveDistance));
         }
-
-        onThrustEnd?.Invoke();
     }
 
-    private IEnumerator ReturnRoutine(Func<Vector2> getTargetPos, float minSpeed, float maxSpeed, float slowRadius, float stopDistance, LayerMask wallMask, Func<Vector2, Vector2, bool> checkIntercept, Action onReturnComplete)
+    private IEnumerator ReturnRoutine(Func<Vector2> getTargetPos, float minSpeed, float maxSpeed, float slowRadius, float stopDistance, Func<Vector2, Vector2, bool> checkIntercept, Action<bool> onReturnComplete)
     {
         if (_rb == null)
         {
-            onReturnComplete?.Invoke();
+            onReturnComplete?.Invoke(false);
             yield break;
         }
-
-        int wallLayerMask = wallMask.value;
 
         while (true)
         {
@@ -135,6 +132,7 @@ public class WeaponMovement : MonoBehaviour
 
             if (distance <= stopDistance || (checkIntercept != null && checkIntercept(currentPos, targetPos)))
             {
+                onReturnComplete?.Invoke(true);
                 break;
             }
 
@@ -148,17 +146,10 @@ public class WeaponMovement : MonoBehaviour
                 break;
             }
 
-            RaycastHit2D hit = Physics2D.CircleCast(currentPos, _weaponRadius, moveDirection, moveDistance, wallLayerMask);
-            if (hit.collider != null && hit.distance > 0.001f)
-            {
-                _rb.MovePosition(hit.centroid + (hit.normal * _skinWidth));
-                break;
-            }
-
-            MoveThrust(moveDirection * moveDistance);
+            _rb.MovePosition(currentPos + (moveDirection * moveDistance));
         }
 
-        onReturnComplete?.Invoke();
+        onReturnComplete?.Invoke(true);
     }
 
     public void TransferVelocityToPhysics()
