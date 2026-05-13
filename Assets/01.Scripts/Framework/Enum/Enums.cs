@@ -21,3 +21,10 @@ public enum WeaponState
     Pinned,
     Returning
 }
+
+public enum ShakeIntensity
+{
+    Weak,
+    Medium,
+    Strong
+}

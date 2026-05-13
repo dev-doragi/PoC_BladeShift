@@ -12,6 +12,9 @@ public abstract class Singleton<T> : MonoBehaviour, ISingletonBootstrap where T 
     [SerializeField] protected bool _isDontDestroyOnLoad = true;
 
     private static T _instance;
+    private static bool _isQuitting;
+
+    public static bool IsExisted => _instance != null && !_isQuitting;
 
     public static T Instance
     {
@@ -19,6 +22,11 @@ public abstract class Singleton<T> : MonoBehaviour, ISingletonBootstrap where T 
         {
             if (_instance == null)
             {
+                if (_isQuitting)
+                {
+                    return null;
+                }
+
                 Debug.LogWarning($"[{typeof(T).Name}] 인스턴스가 씬에 존재하지 않습니다.");
             }
             return _instance;
@@ -29,6 +37,8 @@ public abstract class Singleton<T> : MonoBehaviour, ISingletonBootstrap where T 
 
     protected virtual void Awake()
     {
+        _isQuitting = false;
+
         if (_instance != null && _instance != this as T)
         {
             Destroy(gameObject);
@@ -60,5 +70,10 @@ public abstract class Singleton<T> : MonoBehaviour, ISingletonBootstrap where T 
     protected virtual void OnDestroy()
     {
         if (_instance == this) _instance = null;
+    }
+
+    protected virtual void OnApplicationQuit()
+    {
+        _isQuitting = true;
     }
 }

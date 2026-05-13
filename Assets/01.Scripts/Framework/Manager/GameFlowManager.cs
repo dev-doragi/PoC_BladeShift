@@ -228,7 +228,10 @@ public class GameFlowManager : Singleton<GameFlowManager>
 
         if (resetTimeScale)
         {
-            Time.timeScale = 1f;
+            if (TimeManager.IsExisted)
+            {
+                TimeManager.Instance.ResetTime();
+            }
         }
     }
 
@@ -285,10 +288,16 @@ public class GameFlowManager : Singleton<GameFlowManager>
 
     private IEnumerator SlowMotionTransitionRoutine(bool isWin)
     {
-        Time.timeScale = 0.3f;
-        yield return new WaitForSecondsRealtime(1.5f);
-        Time.timeScale = 1f;
+        if (EventBus.Instance != null)
+        {
+            EventBus.Instance.Publish(new SlowMotionEvent
+            {
+                TargetTimeScale = 0.3f,
+                Duration = 1.5f
+            });
+        }
 
+        yield return new WaitForSecondsRealtime(1.5f);
         _transitionCoroutine = null;
 
         if (isWin)

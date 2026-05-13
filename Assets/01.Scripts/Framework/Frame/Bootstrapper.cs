@@ -13,6 +13,7 @@ public class Bootstrapper : MonoBehaviour
     [SerializeField] private InputReader _inputReaderPrefab;
     [SerializeField] private GameManager _gameManagerPrefab;
     [SerializeField] private GameFlowManager _gameFlowManagerPrefab;
+    [SerializeField] private TimeManager _timeManagerPrefab;
     [SerializeField] private SceneLoader _sceneLoaderPrefab;
     [SerializeField] private PauseManager _pauseManagerPrefab;
     [SerializeField] private SoundManager _soundManagerPrefab;
@@ -30,6 +31,7 @@ public class Bootstrapper : MonoBehaviour
         EnsureInstance(_inputReaderPrefab);
         EnsureInstance(_gameManagerPrefab);
         EnsureInstance(_gameFlowManagerPrefab);
+        EnsureInstance(_timeManagerPrefab);
         EnsureInstance(_sceneLoaderPrefab);
         EnsureInstance(_pauseManagerPrefab);
         EnsureInstance(_soundManagerPrefab);
@@ -54,6 +56,7 @@ public class Bootstrapper : MonoBehaviour
         // Phase 2: CoreState
         if (GameManager.Instance != null) GameManager.Instance.BootstrapIfNeeded();
         if (GameFlowManager.Instance != null) GameFlowManager.Instance.BootstrapIfNeeded();
+        if (TimeManager.Instance != null) TimeManager.Instance.BootstrapIfNeeded();
 
         // Phase 3: World
         //if (CameraManager.Instance != null) CameraManager.Instance.BootstrapIfNeeded();
@@ -77,6 +80,7 @@ public class Bootstrapper : MonoBehaviour
         ValidateRequiredPrefab(_inputReaderPrefab, nameof(_inputReaderPrefab));
         ValidateRequiredPrefab(_gameManagerPrefab, nameof(_gameManagerPrefab));
         ValidateRequiredPrefab(_gameFlowManagerPrefab, nameof(_gameFlowManagerPrefab));
+        ValidateRequiredPrefab(_timeManagerPrefab, nameof(_timeManagerPrefab));
         ValidateRequiredPrefab(_sceneLoaderPrefab, nameof(_sceneLoaderPrefab));
         ValidateRequiredPrefab(_pauseManagerPrefab, nameof(_pauseManagerPrefab));
         ValidateRequiredPrefab(_soundManagerPrefab, nameof(_soundManagerPrefab));

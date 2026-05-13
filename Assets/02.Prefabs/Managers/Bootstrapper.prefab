@@ -48,6 +48,7 @@ MonoBehaviour:
   _inputReaderPrefab: {fileID: 1629288613973717787, guid: 3de1216318c4a7e45b693412c047bfae, type: 3}
   _gameManagerPrefab: {fileID: 1013343998093147393, guid: c308060176d83964c8890fb0189a93bf, type: 3}
   _gameFlowManagerPrefab: {fileID: 35006115399664390, guid: 331962aae744eaa49aa73d953efb3dab, type: 3}
+  _timeManagerPrefab: {fileID: 7209737641535786916, guid: dc9e10dc720d66d4e90bca442de85521, type: 3}
   _sceneLoaderPrefab: {fileID: 7461703734662085315, guid: 2cd02ba7041f8b747ab837b57b1f4c05, type: 3}
   _pauseManagerPrefab: {fileID: 5016635960005500101, guid: 8ce4b2e1ad30a504d8a39b6b4b9b648a, type: 3}
   _soundManagerPrefab: {fileID: 7196221036579498765, guid: 1ef72e21537fd1048a85c6c4970cfe95, type: 3}

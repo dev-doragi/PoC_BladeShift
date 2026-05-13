@@ -68,9 +68,9 @@ public class WeaponMovement : MonoBehaviour
         _rb.MoveRotation(_rb.rotation + (spinSpeed * Time.fixedDeltaTime));
     }
 
-    public void ExecutePinFlight(Vector2 direction, float speed, LayerMask targetMask, Action<Transform> onPinned)
+    public void ExecutePinFlight(Vector2 direction, float speed, LayerMask enemyMask, LayerMask wallMask, Func<Transform, bool> onCheckTarget, Action<Transform> onPinned)
     {
-        StartCoroutine(PinFlightRoutine(direction, speed, targetMask, onPinned));
+        StartCoroutine(PinFlightRoutine(direction, speed, enemyMask, wallMask, onCheckTarget, onPinned));
     }
 
     public void StopFollow()
@@ -83,25 +83,40 @@ public class WeaponMovement : MonoBehaviour
         StartCoroutine(ReturnRoutine(getTargetPos, _minReturnSpeed, _maxReturnSpeed, controlRadius, _returnStopDistance, checkIntercept, onReturnComplete));
     }
 
-    private IEnumerator PinFlightRoutine(Vector2 direction, float speed, LayerMask targetMask, Action<Transform> onPinned)
+    private IEnumerator PinFlightRoutine(Vector2 direction, float speed, LayerMask enemyMask, LayerMask wallMask, Func<Transform, bool> onCheckTarget, Action<Transform> onPinned)
     {
         if (_rb == null) yield break;
 
         Vector2 flightDirection = direction.sqrMagnitude > 0f ? direction.normalized : Vector2.right;
-        int targetLayerMask = targetMask.value;
+        int enemyLayerMask = enemyMask.value;
+        int wallLayerMask = wallMask.value;
 
         while (true)
         {
             yield return new WaitForFixedUpdate();
 
             Vector2 currentPos = _rb.position;
+
+            if (onCheckTarget != null)
+            {
+                Collider2D[] targets = Physics2D.OverlapCircleAll(currentPos, _weaponRadius, enemyLayerMask);
+                foreach (Collider2D target in targets)
+                {
+                    if (target == null) continue;
+                    if (onCheckTarget(target.transform))
+                    {
+                        yield break;
+                    }
+                }
+            }
+
             float moveDistance = speed * Time.fixedDeltaTime;
             if (moveDistance <= 0f)
             {
                 break;
             }
 
-            RaycastHit2D hit = Physics2D.Raycast(currentPos, flightDirection, moveDistance, targetLayerMask);
+            RaycastHit2D hit = Physics2D.Raycast(currentPos, flightDirection, moveDistance, wallLayerMask);
             if (hit.collider != null)
             {
                 _rb.MovePosition(hit.point);

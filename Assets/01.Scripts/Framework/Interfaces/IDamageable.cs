@@ -8,6 +8,7 @@ public struct DamageData
     public float Damage;
     public TeamType AttackerTeam;
     public Vector2 HitPoint;
+    public Vector2 KnockbackForce;
     public bool IsPiercing; // 무기가 관통 상태(Thrust)인지 여부
 }
 

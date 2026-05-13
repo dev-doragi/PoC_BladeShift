@@ -14,6 +14,12 @@ public struct InGameStateChangedEvent
 {
     public InGameState NewState;
 }
+
+public struct SlowMotionEvent
+{
+    public float TargetTimeScale;
+    public float Duration;
+}
 #endregion
 
 #region [2. Stage & Wave Flow Events (스테이지 및 웨이브 흐름)]
@@ -90,6 +96,16 @@ public struct PausePressedEvent { }
 public struct WeaponStateChangeEvent
 {
     public WeaponState NewState;
+}
+
+public struct HitStopEvent
+{
+    public float Duration;
+}
+
+public struct CameraShakeEvent
+{
+    public ShakeIntensity Intensity;
 }
 #endregion
 

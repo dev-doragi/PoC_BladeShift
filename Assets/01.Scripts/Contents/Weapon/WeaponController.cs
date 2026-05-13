@@ -13,6 +13,7 @@ public class WeaponController : MonoBehaviour
     [Header("2. Combat Settings")]
     [SerializeField] private float _slowMotionScale = 0.2f;
     [SerializeField] private LayerMask _wallAndEnvironmentLayer;
+    [SerializeField] private float _thrustDragThreshold = 2.0f;
 
     private Rigidbody2D _rb;
     private Collider2D _collider;
@@ -165,10 +166,21 @@ public class WeaponController : MonoBehaviour
                 _view.HideTrajectory();
                 break;
 
+            case WeaponState.Pinned:
+            case WeaponState.PinningFlight:
+            case WeaponState.Returning:
+                _rb.bodyType = RigidbodyType2D.Kinematic;
+                _rb.linearVelocity = Vector2.zero;
+                _rb.angularVelocity = 0f;
+                _collider.isTrigger = true;
+                break;
+
             case WeaponState.Controlled:
             case WeaponState.Slashing:
             case WeaponState.Thrusting:
                 _rb.bodyType = RigidbodyType2D.Kinematic;
+                _rb.linearVelocity = Vector2.zero;
+                _rb.angularVelocity = 0f;
                 _collider.isTrigger = true;
                 break;
         }
@@ -180,7 +192,7 @@ public class WeaponController : MonoBehaviour
         int enemyLayer = LayerMask.NameToLayer("Enemy");
         int environmentLayer = LayerMask.NameToLayer("Environment");
 
-        if (enemyLayer >= 0) Physics2D.IgnoreLayerCollision(weaponLayer, enemyLayer, !grounded);
+        if (enemyLayer >= 0) Physics2D.IgnoreLayerCollision(weaponLayer, enemyLayer, true);
         if (environmentLayer >= 0) Physics2D.IgnoreLayerCollision(weaponLayer, environmentLayer, false);
     }
 
@@ -231,7 +243,7 @@ public class WeaponController : MonoBehaviour
             _view.HideTrajectory();
             ResetTimeScale();
 
-            if (dragDistance < 0.5f)
+            if (dragDistance < _thrustDragThreshold)
             {
                 ChangeState(WeaponState.Controlled);
                 return;
@@ -247,14 +259,26 @@ public class WeaponController : MonoBehaviour
         _isThrustAiming = false;
         _view.HideTrajectory();
         ResetTimeScale();
+        _hitTargets.Clear();
         ChangeState(WeaponState.PinningFlight);
         _isAttacking = true;
-        _movement.ExecutePinFlight(direction, _combat.PinSpeed, _wallAndEnvironmentLayer, hitTransform =>
+        _movement.ExecutePinFlight(direction, _combat.PinSpeed, _combat.EnemyLayer, _wallAndEnvironmentLayer, targetTransform =>
         {
-            if (hitTransform != null && hitTransform.TryGetComponent<IDamageable>(out _))
+            if (!_combat.PerformPinDamage(targetTransform, transform.position, direction, _hitTargets))
             {
-                transform.SetParent(hitTransform);
+                return false;
             }
+
+            if (targetTransform != null)
+            {
+                transform.SetParent(targetTransform);
+            }
+
+            _isAttacking = false;
+            ChangeState(WeaponState.Pinned);
+            return true;
+        }, hitTransform =>
+        {
             _isAttacking = false;
             ChangeState(WeaponState.Pinned);
         });
@@ -274,7 +298,7 @@ public class WeaponController : MonoBehaviour
         ChangeState(WeaponState.Returning);
 
         _movement.ExecuteReturn(
-            _sensor.GetMouseWorldPosition,
+            () => _sensor.GetClampedTargetPosition(_wallAndEnvironmentLayer),
             _controlRadius,
             (currentPos, mousePos) => _sensor.IsMouseHovering(currentPos, mousePos),
             isSuccess =>
@@ -288,16 +312,16 @@ public class WeaponController : MonoBehaviour
     {
         if (_isTimeSlowed) return;
         _isTimeSlowed = true;
-        Time.timeScale = _slowMotionScale;
-        Time.fixedDeltaTime = 0.02f * Time.timeScale;
+        // 직접 수정 대신 이벤트 발행 (시간은 TimeManager가 관리)
+        EventBus.Instance?.Publish(new SlowMotionEvent { TargetTimeScale = _slowMotionScale, Duration = 999f });
     }
 
     private void ResetTimeScale()
     {
-        if (!_isTimeSlowed && Time.timeScale == 1f) return;
+        if (!_isTimeSlowed) return;
         _isTimeSlowed = false;
-        Time.timeScale = 1.0f;
-        Time.fixedDeltaTime = 0.02f;
+        // 직접 1.0으로 돌리지 말고 TimeManager에게 초기화 요청
+        TimeManager.Instance?.ResetTime();
     }
 
     private void OnDrawGizmos()

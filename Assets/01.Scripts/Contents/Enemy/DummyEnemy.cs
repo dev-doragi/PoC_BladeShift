@@ -1,29 +1,8 @@
+using System.Collections;
 using UnityEngine;
 
-public class DummyEnemy : MonoBehaviour, IDamageable
+
+public class DummyEnemy : EnemyBase
 {
-    [SerializeField] private float _maxHealth = 50f;
-    private float _currentHealth;
-
-    public TeamType Team => TeamType.Enemy;
-    public bool IsDead => _currentHealth <= 0f;
-
-    private void Awake()
-    {
-        _currentHealth = _maxHealth;
-    }
-
-    public void TakeDamage(DamageData damageData)
-    {
-        if (IsDead) return;
-
-        _currentHealth -= damageData.Damage;
-        Debug.Log($"<color=red>[Enemy]</color> í”¼ê²©! ë‚¨ì€ ì²´ë ¥: {_currentHealth} | íƒ€ê²© ìœ„ì¹˜: {damageData.HitPoint}");
-
-        if (IsDead)
-        {
-            Debug.Log("<color=red>[Enemy]</color> ì‚¬ë§!");
-            gameObject.SetActive(false); // ì¼ë‹¨ ë¹„í™œì„±í™”
-        }
-    }
+    // ÃßÈÄ AI µî °íÀ¯ ·ÎÁ÷¸¸ ÀÌ°÷¿¡ ÀÛ¼º
 }

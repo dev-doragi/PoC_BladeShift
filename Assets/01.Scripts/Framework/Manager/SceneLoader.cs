@@ -21,7 +21,7 @@ public class SceneLoader : Singleton<SceneLoader>
 
     private void ResetGlobalState()
     {
-        Time.timeScale = 1f;
+        TimeManager.Instance?.ResetTime();
 
         if (InputReader.Instance != null)
         {

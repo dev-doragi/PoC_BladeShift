@@ -70,6 +70,12 @@ public class WeaponSensor : MonoBehaviour
 
         if (distance <= 0.01f) return mousePos;
 
+        if (distance > _controlRadius)
+        {
+            direction = direction.normalized * _controlRadius;
+            distance = _controlRadius;
+        }
+
         RaycastHit2D hit = Physics2D.Raycast(start, direction.normalized, distance, wallMask);
         return hit.collider != null ? hit.point : mousePos;
     }

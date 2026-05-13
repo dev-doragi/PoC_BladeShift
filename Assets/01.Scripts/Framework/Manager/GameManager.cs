@@ -6,7 +6,6 @@ using UnityEngine;
 /// <remarks>
 /// [주요 역할]
 /// - Ready, Playing, Paused, GameOver, GameClear 상태 전환 및 관리
-/// - 상태 변화에 따른 Time.timeScale 전역 제어
 ///
 /// [이벤트 흐름]
 /// - Subscribe: StageLoadedEvent, StageClearedEvent, StageFailedEvent
@@ -66,8 +65,6 @@ public class GameManager : Singleton<GameManager>
 
         Debug.Log($"[GameManager] State Changed: {CurrentState} -> {newState}");
         CurrentState = newState;
-
-        Time.timeScale = (CurrentState == GameState.Paused || CurrentState == GameState.GameOver || CurrentState == GameState.GameClear) ? 0f : 1f;
 
         EventBus.Instance.Publish(new GameStateChangedEvent { NewState = CurrentState });
     }

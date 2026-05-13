@@ -4,11 +4,11 @@ using UnityEngine;
 public class WeaponCombat : MonoBehaviour
 {
     [SerializeField] private LayerMask _enemyLayer;
+    [SerializeField] private float _knockbackPower = 15f;
     [SerializeField] private float _slashDamage = 15f;
     [SerializeField] private float _slashRadius = 3.5f;
     [SerializeField] private float _tickDamageInterval = 0.2f;
     [SerializeField] private float _pinDamage = 30f;
-    [SerializeField] private float _pinRadius = 1.2f;
     [SerializeField] private float _spinSpeed = 720f;
     [SerializeField] private float _pinSpeed = 24f;
 
@@ -17,6 +17,7 @@ public class WeaponCombat : MonoBehaviour
     public float SlashRadius => _slashRadius;
     public float SpinSpeed => _spinSpeed;
     public float PinSpeed => _pinSpeed;
+    public LayerMask EnemyLayer => _enemyLayer;
 
     public void PerformSlashDamage(Vector3 position, float radius, float damage, float angleZ)
     {
@@ -26,10 +27,15 @@ public class WeaponCombat : MonoBehaviour
         {
             if (col.TryGetComponent<IDamageable>(out var damageable))
             {
+                Vector2 hitPoint = col.ClosestPoint(position);
+                Vector2 knockbackDirection = ((Vector2)col.transform.position - (Vector2)position).normalized;
                 damageable.TakeDamage(new DamageData
                 {
                     Damage = damage,
-                    AttackerTeam = TeamType.Player
+                    AttackerTeam = TeamType.Player,
+                    HitPoint = hitPoint,
+                    KnockbackForce = knockbackDirection * _knockbackPower,
+                    IsPiercing = false
                 });
             }
         }
@@ -48,20 +54,27 @@ public class WeaponCombat : MonoBehaviour
         _lastTickTime = Time.time - _tickDamageInterval;
     }
 
-    public void PerformPinDamage(Vector3 position, HashSet<IDamageable> hitTargets)
+    public bool PerformPinDamage(Transform targetTransform, Vector3 position, Vector2 direction, HashSet<IDamageable> hitTargets)
     {
-        Collider2D[] targets = Physics2D.OverlapCircleAll(position, _pinRadius, _enemyLayer);
-        foreach (Collider2D col in targets)
-        {
-            if (!col.TryGetComponent<IDamageable>(out var damageable)) continue;
-            if (hitTargets != null && !hitTargets.Add(damageable)) continue;
+        if (targetTransform == null) return false;
+        if (!targetTransform.TryGetComponent<IDamageable>(out var damageable)) return false;
+        if (damageable.IsDead) return false;
+        if (hitTargets != null && !hitTargets.Add(damageable)) return !damageable.IsDead;
 
-            damageable.TakeDamage(new DamageData
-            {
-                Damage = _pinDamage,
-                AttackerTeam = TeamType.Player,
-                IsPiercing = true
-            });
-        }
+        Collider2D targetCollider = targetTransform.GetComponent<Collider2D>();
+        if (targetCollider == null) return false;
+
+        Vector2 knockbackDirection = direction.sqrMagnitude > 0f ? direction.normalized : Vector2.right;
+        Vector2 hitPoint = targetCollider.ClosestPoint(position);
+        damageable.TakeDamage(new DamageData
+        {
+            Damage = _pinDamage,
+            AttackerTeam = TeamType.Player,
+            HitPoint = hitPoint,
+            KnockbackForce = knockbackDirection * (_knockbackPower * 3f),
+            IsPiercing = true
+        });
+
+        return !damageable.IsDead;
     }
 }
