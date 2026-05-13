@@ -184,13 +184,11 @@ public class InputReader : Singleton<InputReader>
 
     private void OnSecondaryAttackStarted(InputAction.CallbackContext _) 
     {
-        Debug.Log("[InputReader] SecondaryAttack started");
         PublishIfAllowed(new SecondaryAttackEvent { IsStarted = true });
     }
 
     private void OnSecondaryAttackCanceled(InputAction.CallbackContext _)
     {
-        Debug.Log("[InputReader] SecondaryAttack canceled");
         PublishIfAllowed(new SecondaryAttackEvent { IsStarted = false });
     }
 

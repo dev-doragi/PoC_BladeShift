@@ -1,6 +1,7 @@
-using UnityEngine;
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody2D), typeof(Collider2D))]
 [RequireComponent(typeof(WeaponMovement), typeof(WeaponCombat))]
@@ -9,7 +10,6 @@ public class WeaponController : MonoBehaviour
 {
     [Header("1. Dual-Radius Settings")]
     [SerializeField] private Transform _playerTransform;
-    [SerializeField] private float _controlRadius = 10f;
 
     [Header("2. Follow Settings")]
     [SerializeField] private float _followSmoothTime = 0.1f;
@@ -21,6 +21,9 @@ public class WeaponController : MonoBehaviour
     [SerializeField] private float _thrustDamage = 30f;
     [SerializeField] private float _thrustRadius = 1.2f;
     [SerializeField] private float _thrustSpeed = 20f;
+    [SerializeField] private float _minReturnSpeed = 10f;
+    [SerializeField] private float _maxReturnSpeed = 30f;
+    [SerializeField] private float _returnStopDistance = 0.5f;
     [SerializeField] private float _slowMotionScale = 0.2f;
     [SerializeField] private LayerMask _enemyLayer;
     [SerializeField] private LayerMask _wallAndEnvironmentLayer;
@@ -31,6 +34,9 @@ public class WeaponController : MonoBehaviour
     private WeaponCombat _combat;
     private WeaponSensor _sensor;
     private WeaponView _view;
+    private HashSet<IDamageable> _hitTargets = new HashSet<IDamageable>();
+    private PlayerController _playerController;
+    private float _controlRadius;
 
     private WeaponState _currentState = WeaponState.Grounded;
     private bool _isAttacking = false;
@@ -56,7 +62,24 @@ public class WeaponController : MonoBehaviour
             if (playerObject != null) _playerTransform = playerObject.transform;
         }
 
-        _sensor.Configure(_playerTransform, _mainCamera, _controlRadius, 0f, 0f, 0f);
+        if (_playerTransform == null)
+        {
+            Debug.LogError("[WeaponController] Player object missing.");
+            enabled = false;
+            return;
+        }
+
+        _playerController = _playerTransform.GetComponent<PlayerController>();
+        if (_playerController == null)
+        {
+            Debug.LogError("[WeaponController] PlayerController missing on player object.");
+            enabled = false;
+            return;
+        }
+
+        _controlRadius = _playerController.ControlRadius;
+
+        _sensor.Configure(_playerTransform, _mainCamera, _controlRadius, 1.0f, 1.5f, 0f);
         _combat.Configure(_enemyLayer);
         _view.Configure(_sensor.GetPlayerTransform(), _controlRadius, 0f, 0f, _slashRadius);
         _movement.CacheRigidbody(_rb);
@@ -82,7 +105,7 @@ public class WeaponController : MonoBehaviour
     private void Update()
     {
         Vector2 mouseWorldPos = _sensor.GetMouseWorldPosition();
-        bool showConnectionLine = _currentState == WeaponState.Controlled;
+        bool showConnectionLine = _currentState == WeaponState.Controlled || _isAttacking;
 
         _view.RenderConnectionLine(_playerTransform.position, transform.position, showConnectionLine);
 
@@ -102,12 +125,12 @@ public class WeaponController : MonoBehaviour
 
         if (!_isAttacking && _currentState == WeaponState.Grounded)
         {
-            if (_sensor.ShouldAcquireControl(transform.position, mouseWorldPos))
+            if (_sensor.ShouldAcquireControl(transform.position, mouseWorldPos, _wallAndEnvironmentLayer))
                 ChangeState(WeaponState.Controlled);
         }
         else if (!_isAttacking && _currentState == WeaponState.Controlled)
         {
-            if (_sensor.ShouldReleaseControl(transform.position, mouseWorldPos))
+            if (_sensor.ShouldReleaseControl(transform.position, mouseWorldPos, _wallAndEnvironmentLayer))
                 ChangeState(WeaponState.Grounded);
         }
     }
@@ -120,12 +143,17 @@ public class WeaponController : MonoBehaviour
             return;
         }
 
+        if (_isAttacking && _currentState == WeaponState.Thrusting)
+        {
+            _combat.PerformThrustDamage(_rb.position, _thrustRadius, _thrustDamage, _hitTargets);
+        }
+
         bool isMobileState = _currentState == WeaponState.Controlled || _currentState == WeaponState.Slashing;
         bool isThrusting = _currentState == WeaponState.Thrusting;
 
         if (isMobileState && !isThrusting && !_isThrustAiming)
         {
-            _movement.FollowMouseHover(_sensor.GetMouseWorldPosition(), _followSmoothTime);
+            _movement.FollowMouseHover(_sensor.GetClampedTargetPosition(_wallAndEnvironmentLayer), _followSmoothTime, _wallAndEnvironmentLayer);
         }
     }
 
@@ -168,12 +196,12 @@ public class WeaponController : MonoBehaviour
         int environmentLayer = LayerMask.NameToLayer("Environment");
 
         if (enemyLayer >= 0) Physics2D.IgnoreLayerCollision(weaponLayer, enemyLayer, !grounded);
-        if (environmentLayer >= 0) Physics2D.IgnoreLayerCollision(weaponLayer, environmentLayer, !grounded);
+        if (environmentLayer >= 0) Physics2D.IgnoreLayerCollision(weaponLayer, environmentLayer, false);
     }
 
-    #region [Combat: Slash & Thrust]
     private void OnPrimaryAttack(PrimaryAttackEvent evt)
     {
+        if (_isThrustAiming) return;
         if (_currentState != WeaponState.Controlled || !evt.IsStarted || _isAttacking) return;
         StartCoroutine(SlashRoutine());
     }
@@ -227,58 +255,46 @@ public class WeaponController : MonoBehaviour
             }
 
             Vector2 direction = (mouseWorldPos - _fixedAimPos).normalized;
-            StartCoroutine(ThrustRoutine(direction));
+            StartThrustSequence(direction);
         }
     }
 
-    private IEnumerator ThrustRoutine(Vector2 direction)
+    private void StartThrustSequence(Vector2 direction)
     {
         ChangeState(WeaponState.Thrusting);
         _isAttacking = true;
+        _hitTargets.Clear();
 
-        if (direction.sqrMagnitude <= 0f)
-        {
-            ChangeState(WeaponState.Grounded);
-            _isAttacking = false;
-            yield break;
-        }
+        _movement.ExecuteThrust(
+            direction,
+            _thrustSpeed,
+            _wallAndEnvironmentLayer,
+            pos => !_sensor.IsPlayerInRange(pos),
+            StartReturnSequence);
+    }
 
-        HashSet<IDamageable> hitTargets = new HashSet<IDamageable>();
-        Vector2 thrustDirection = direction.normalized;
-        float thrustSpeed = _thrustSpeed;
-        int wallMask = _wallAndEnvironmentLayer.value != 0 ? _wallAndEnvironmentLayer.value : LayerMask.GetMask("Ground", "Wall", "Ceiling");
+    private void StartReturnSequence()
+    {
+        _hitTargets.Clear();
 
-        while (true)
-        {
-            yield return new WaitForFixedUpdate();
-
-            float moveDistance = thrustSpeed * Time.fixedDeltaTime;
-            RaycastHit2D wallHit = Physics2D.Raycast(transform.position, thrustDirection, moveDistance, wallMask);
-            if (wallHit.collider != null)
+        _movement.ExecuteReturn(
+            _sensor.GetMouseWorldPosition,
+            _minReturnSpeed,
+            _maxReturnSpeed,
+            _controlRadius,
+            _returnStopDistance,
+            _wallAndEnvironmentLayer,
+            (currentPos, mousePos) => _sensor.IsMouseHovering(currentPos, mousePos),
+            () =>
             {
-                _movement.MoveThrust(thrustDirection * wallHit.distance);
-                ChangeState(WeaponState.Grounded);
                 _isAttacking = false;
-                yield break;
-            }
-
-            _movement.MoveThrust(thrustDirection * moveDistance);
-            _combat.PerformThrustDamage(transform.position, _thrustRadius, _thrustDamage, hitTargets);
-
-            if (!_sensor.IsPlayerInRange(transform.position))
-                break;
-
-            yield return null;
-        }
-
-        ChangeState(WeaponState.Grounded);
-        _isAttacking = false;
+                ChangeState(WeaponState.Controlled);
+            });
     }
 
     private void ApplySlowMotion()
     {
         if (_isTimeSlowed) return;
-
         _isTimeSlowed = true;
         Time.timeScale = _slowMotionScale;
         Time.fixedDeltaTime = 0.02f * Time.timeScale;
@@ -287,12 +303,10 @@ public class WeaponController : MonoBehaviour
     private void ResetTimeScale()
     {
         if (!_isTimeSlowed && Time.timeScale == 1f) return;
-
         _isTimeSlowed = false;
         Time.timeScale = 1.0f;
         Time.fixedDeltaTime = 0.02f;
     }
-    #endregion
 
     private void OnDrawGizmos()
     {
