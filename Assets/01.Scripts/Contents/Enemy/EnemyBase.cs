@@ -63,20 +63,27 @@ public abstract class EnemyBase : MonoBehaviour, IDamageable
 
     protected virtual void Die(Vector2 knockbackForce)
     {
+
         int weaponLayer = LayerMask.NameToLayer("Weapon");
         for (int i = transform.childCount - 1; i >= 0; i--)
         {
             Transform child = transform.GetChild(i);
-            if (child.gameObject.layer == weaponLayer) child.SetParent(null);
+            if (child.gameObject.layer == weaponLayer)
+            {
+                child.SetParent(null);
+            }
         }
 
         if (_rb != null)
         {
-            _rb.freezeRotation = false;
+            _rb.bodyType = RigidbodyType2D.Dynamic; 
+            _rb.freezeRotation = false; 
             _rb.linearDamping = 1.5f;
             _rb.angularDamping = 1.0f;
+            _rb.linearVelocity = Vector2.zero;
+            _rb.AddForce(knockbackForce, ForceMode2D.Impulse); 
             float torqueDir = knockbackForce.x > 0 ? -1f : 1f;
-            _rb.AddTorque(torqueDir * 15f, ForceMode2D.Impulse);
+            _rb.AddTorque(torqueDir * 40f, ForceMode2D.Impulse);
         }
 
         int corpseLayer = LayerMask.NameToLayer("Corpse");
@@ -87,8 +94,17 @@ public abstract class EnemyBase : MonoBehaviour, IDamageable
 
     protected virtual IEnumerator DeathSequenceRoutine()
     {
-        yield return new WaitForSeconds(1.5f);
-
+        yield return new WaitForSeconds(0.5f);
+        if (_rb != null)
+        {
+            float timeout = 4f;
+            while (_rb.linearVelocity.sqrMagnitude > 0.5f && timeout > 0f)
+            {
+                timeout -= Time.deltaTime;
+                yield return null;
+            }
+        }
+        yield return new WaitForSeconds(0.5f);
         if (_rb != null)
         {
             _rb.bodyType = RigidbodyType2D.Kinematic;

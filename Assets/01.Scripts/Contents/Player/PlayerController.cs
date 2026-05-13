@@ -36,16 +36,6 @@ public class PlayerController : MonoBehaviour
     private void OnMoveInput(MoveInputEvent evt)
     {
         _motor.SetHorizontalInput(evt.Direction.x);
-
-        // Jump는 이제 JumpInput이 담당
-        //if (evt.Direction.y > 0.5f)
-        //{
-        //    _motor.RequestJump();
-        //}
-        //else if (evt.Direction.y <= 0f)
-        //{
-        //    _motor.CancelJump();
-        //}
     }
 
     private void OnJumpInput(JumpInputEvent evt)
