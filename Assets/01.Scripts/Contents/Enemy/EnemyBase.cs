@@ -63,7 +63,6 @@ public abstract class EnemyBase : MonoBehaviour, IDamageable
 
     protected virtual void Die(Vector2 knockbackForce)
     {
-
         int weaponLayer = LayerMask.NameToLayer("Weapon");
         for (int i = transform.childCount - 1; i >= 0; i--)
         {

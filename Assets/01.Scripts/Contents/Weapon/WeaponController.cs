@@ -378,7 +378,6 @@ public class WeaponController : MonoBehaviour
         EventBus.Instance?.Publish(new HitStopEvent { Duration = 0.2f });
         yield return new WaitForSecondsRealtime(0.2f);
 
-        // 박혀있던 적 식별 (EnemyBase만)
         Transform victim = null;
         for (int i = 0; i < transform.childCount; i++)
         {
@@ -389,7 +388,6 @@ public class WeaponController : MonoBehaviour
             }
         }
 
-        // 반경을 훨씬 크게 (SlashRadius의 1.8배 보장)
         Vector2 pivot = _sensor.GetMouseWorldPosition();
         Vector2 startPos = transform.position;
         float radius = Vector2.Distance(pivot, startPos);
@@ -400,7 +398,7 @@ public class WeaponController : MonoBehaviour
 
         float duration = 0.35f;
         float elapsed = 0f;
-        bool hasReleased = false; // 릴리즈 플래그
+        bool hasReleased = false;
 
         while (elapsed < duration)
         {
@@ -408,19 +406,16 @@ public class WeaponController : MonoBehaviour
             float t = elapsed / duration;
             float curve = 1f - Mathf.Pow(1f - t, 3f);
 
-            // 궤도 계산
             float currentAngle = startAngle + (360f * curve); 
             Vector2 offset = new Vector2(Mathf.Cos(currentAngle * Mathf.Deg2Rad), Mathf.Sin(currentAngle * Mathf.Deg2Rad)) * radius;
 
             transform.position = pivot + offset;
             transform.rotation = Quaternion.Euler(0, 0, currentAngle + 90f);
 
-            // [핵심] 휘두르는 중간(30% 진행 시점)에 원심력을 받아 날아가는 연출 (릴리즈)
             if (!hasReleased && t > 0.3f)
             {
                 hasReleased = true;
                 _combat.PerformSpinFinisher(transform.position, victim);
-                // Visual이 아닌 적(victim)만 떼어내기
                 if (victim != null)
                 {
                     victim.SetParent(null);
@@ -430,7 +425,6 @@ public class WeaponController : MonoBehaviour
             yield return null;
         }
 
-        // 프레임 드랍 등으로 릴리즈가 스킵됐을 경우를 대비한 안전 장치
         if (!hasReleased)
         {
             _combat.PerformSpinFinisher(transform.position, victim);

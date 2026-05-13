@@ -63,7 +63,6 @@ public class TimeManager : Singleton<TimeManager>
 
     private void OnHitStop(HitStopEvent evt)
     {
-        Debug.Log("HitStop!");
         _hitStopTimer = Mathf.Max(0f, evt.Duration);
         CalculateTimeScale();
     }
