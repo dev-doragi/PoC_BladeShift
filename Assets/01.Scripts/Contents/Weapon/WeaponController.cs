@@ -321,6 +321,7 @@ public class WeaponController : MonoBehaviour
         }, 
         hitTransform => 
         {
+            EventBus.Instance?.Publish(new CameraShakeEvent { Intensity = ShakeIntensity.Weak });
             _isAttacking = false;
             ChangeState(WeaponState.Pinned);
         });
