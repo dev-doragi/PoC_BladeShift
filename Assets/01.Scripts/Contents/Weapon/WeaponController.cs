@@ -379,6 +379,7 @@ public class WeaponController : MonoBehaviour
     {
         _isAttacking = true;
         EventBus.Instance?.Publish(new HitStopEvent { Duration = 0.2f });
+        EventBus.Instance?.Publish(new CameraShakeEvent { Intensity = ShakeIntensity.Strong });
         Vector2 pivot = _sensor.GetMouseWorldPosition();
         float radius = Vector2.Distance(pivot, transform.position);
         radius = Mathf.Max(radius, _combat.SlashRadius * 1.8f);

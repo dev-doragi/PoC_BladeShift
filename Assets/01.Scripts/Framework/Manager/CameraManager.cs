@@ -1,11 +1,9 @@
 using UnityEngine;
 using System.Collections;
+using Unity.Cinemachine;
 
 [RequireComponent(typeof(Camera))]
 [DefaultExecutionOrder(-110)]
-/// <summary>
-/// 카메라 이동, 줌, 흔들림을 처리하는 공통 카메라 매니저입니다.
-/// </summary>
 public class CameraManager : Singleton<CameraManager>
 {
     [Header("Bounds")]
@@ -16,9 +14,11 @@ public class CameraManager : Singleton<CameraManager>
     [SerializeField] private float _minZoom = 3f;
     [SerializeField] private float _maxZoom = 15f;
 
+    [Header("Cinemachine 3 (Impulse)")]
+    [SerializeField] private CinemachineImpulseSource _impulseSource;
+
     private Camera _mainCamera;
     private Vector3 _originalPos;
-    private Coroutine _shakeCoroutine;
 
     private float _targetZoom;
     private float _initialZoom;
@@ -50,12 +50,8 @@ public class CameraManager : Singleton<CameraManager>
             return;
         }
 
-        if (_mainCamera.orthographic == false)
-        {
-            Debug.LogError("CameraManager: Orthographic Camera only");
-            enabled = false;
-            return;
-        }
+        if (_impulseSource == null)
+            _impulseSource = GetComponent<CinemachineImpulseSource>();
 
         _initialZoom = _mainCamera.orthographicSize;
         _targetZoom = _initialZoom;
@@ -64,11 +60,14 @@ public class CameraManager : Singleton<CameraManager>
     protected override void OnBootstrap()
     {
         transform.position = ClampCameraPosition(transform.position, _mainCamera.orthographicSize);
+    }
 
-        if (EventBus.Instance != null)
-        {
-            EventBus.Instance.Subscribe<ScrollEvent>(HandleScroll);
-        }
+    private void OnEnable()
+    {
+        if (EventBus.Instance == null) return;
+
+        EventBus.Instance.Subscribe<ScrollEvent>(HandleScroll);
+        EventBus.Instance.Subscribe<CameraShakeEvent>(OnCameraShake);
     }
 
     private void OnDisable()
@@ -76,6 +75,7 @@ public class CameraManager : Singleton<CameraManager>
         if (EventBus.Instance == null) return;
 
         EventBus.Instance.Unsubscribe<ScrollEvent>(HandleScroll);
+        EventBus.Instance.Unsubscribe<CameraShakeEvent>(OnCameraShake);
     }
 
     private void Update()
@@ -236,30 +236,25 @@ public class CameraManager : Singleton<CameraManager>
         if (InputReader.Instance != null) InputReader.Instance.SetInputBlocked(false);
     }
 
-    public void ShakeWeak() => StartShake(0.18f, 0.08f);
-    public void ShakeMedium() => StartShake(0.18f, 0.15f);
-    public void ShakeStrong() => StartShake(0.18f, 0.25f);
 
-    private void StartShake(float duration, float magnitude)
+    private void OnCameraShake(CameraShakeEvent evt)
     {
-        if (_shakeCoroutine != null)
-            return;
-        _shakeCoroutine = StartCoroutine(ShakeCoroutine(duration, magnitude));
-    }
+        if (_impulseSource == null) return;
 
-    private System.Collections.IEnumerator ShakeCoroutine(float duration, float magnitude)
-    {
-        float elapsed = 0f;
-        Vector3 basePos = transform.localPosition;
-        while (elapsed < duration)
+        float force = 0f;
+
+        switch (evt.Intensity)
         {
-            float offsetX = Random.Range(-1f, 1f) * magnitude;
-            float offsetY = Random.Range(-1f, 1f) * magnitude;
-            transform.localPosition = basePos + new Vector3(offsetX, offsetY, 0f);
-            elapsed += Time.unscaledDeltaTime;
-            yield return null;
+            case ShakeIntensity.Weak: force = 0.3f; break;
+            case ShakeIntensity.Medium: force = 0.6f; break;
+            case ShakeIntensity.Strong: force = 1.0f; break;
         }
-        transform.localPosition = basePos;
-        _shakeCoroutine = null;
+
+        _impulseSource.GenerateImpulse(force);
     }
+
+    public void ShakeWeak() => _impulseSource?.GenerateImpulse(0.3f);
+    public void ShakeMedium() => _impulseSource?.GenerateImpulse(0.6f);
+    public void ShakeStrong() => _impulseSource?.GenerateImpulse(1.0f);
+
 }
