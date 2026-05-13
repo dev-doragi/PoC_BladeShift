@@ -30,7 +30,7 @@ public class WeaponCombat : MonoBehaviour
     public void PerformThrustDamage(Vector3 position, float radius, float damage, HashSet<IDamageable> hitTargets)
     {
         Collider2D[] targets = Physics2D.OverlapCircleAll(position, radius, _enemyLayer);
-        foreach (var col in targets)
+        foreach (Collider2D col in targets)
         {
             if (!col.TryGetComponent<IDamageable>(out var damageable)) continue;
             if (hitTargets != null && !hitTargets.Add(damageable)) continue;

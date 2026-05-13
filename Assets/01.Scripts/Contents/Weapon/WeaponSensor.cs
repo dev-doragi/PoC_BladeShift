@@ -31,6 +31,12 @@ public class WeaponSensor : MonoBehaviour
         return Vector2.Distance(weaponPosition, _playerTransform.position) <= _controlRadius;
     }
 
+    public bool IsMouseInRange(Vector2 mousePos)
+    {
+        if (_playerTransform == null) return false;
+        return Vector2.Distance(mousePos, _playerTransform.position) <= _controlRadius;
+    }
+
     public bool IsMouseHovering(Vector3 weaponPosition, Vector2 mousePos)
     {
         return Vector2.Distance(weaponPosition, mousePos) <= _mouseCaptureRadius;
@@ -43,7 +49,7 @@ public class WeaponSensor : MonoBehaviour
 
     public bool ShouldAcquireControl(Vector3 weaponPosition, Vector2 mousePos)
     {
-        return IsPlayerInRange(weaponPosition) && IsMouseHovering(weaponPosition, mousePos);
+        return IsPlayerInRange(weaponPosition) && IsMouseInRange(mousePos);
     }
 
     public Transform GetPlayerTransform()
@@ -53,22 +59,6 @@ public class WeaponSensor : MonoBehaviour
 
     public bool ShouldReleaseControl(Vector3 weaponPosition, Vector2 mousePos)
     {
-        if (!IsPlayerInRange(weaponPosition))
-        {
-            Debug.Log("[BladeShift] 사거리 이탈 - 제어 상실");
-            return true;
-        }
-
-        if (!IsMouseMaintainingControl(weaponPosition, mousePos))
-        {
-            return true;
-        }
-
-        if (InputReader.Instance != null && InputReader.Instance.GetMouseDelta().magnitude > _breakMouseSpeed)
-        {
-            return true;
-        }
-
-        return false;
+        return !ShouldAcquireControl(weaponPosition, mousePos);
     }
 }

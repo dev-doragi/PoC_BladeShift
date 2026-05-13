@@ -3,6 +3,7 @@ using UnityEngine;
 public class WeaponView : MonoBehaviour
 {
     [SerializeField] private LineRenderer _trajectoryLine;
+    [SerializeField] private LineRenderer _connectionLine;
 
     private Transform _playerTransform;
     private float _controlRadius;
@@ -46,6 +47,22 @@ public class WeaponView : MonoBehaviour
         {
             _trajectoryLine.enabled = false;
         }
+    }
+
+    public void RenderConnectionLine(Vector3 playerPos, Vector3 weaponPos, bool isVisible)
+    {
+        if (_connectionLine == null) return;
+
+        if (!isVisible)
+        {
+            _connectionLine.enabled = false;
+            return;
+        }
+
+        _connectionLine.enabled = true;
+        _connectionLine.positionCount = 2;
+        _connectionLine.SetPosition(0, playerPos);
+        _connectionLine.SetPosition(1, weaponPos);
     }
 
     public void DrawGizmos()

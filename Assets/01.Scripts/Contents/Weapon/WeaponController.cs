@@ -10,11 +10,9 @@ public class WeaponController : MonoBehaviour
     [Header("1. Dual-Radius Settings")]
     [SerializeField] private Transform _playerTransform;
     [SerializeField] private float _controlRadius = 10f;
-    [SerializeField] private float _mouseCaptureRadius = 2.5f;
 
-    [Header("2. Hover & Follow Settings")]
-    [SerializeField] private float _followSmoothTime = 0.12f;
-    [SerializeField] private float _breakMouseSpeed = 100f;
+    [Header("2. Follow Settings")]
+    [SerializeField] private float _followSmoothTime = 0.1f;
 
     [Header("3. Combat Settings")]
     [SerializeField] private float _slashDamage = 15f;
@@ -22,12 +20,13 @@ public class WeaponController : MonoBehaviour
     [SerializeField] private float _slashDuration = 0.25f;
     [SerializeField] private float _thrustDamage = 30f;
     [SerializeField] private float _thrustRadius = 1.2f;
-    [SerializeField] private float _thrustSpeed = 25f;
+    [SerializeField] private float _thrustSpeed = 20f;
     [SerializeField] private float _slowMotionScale = 0.2f;
     [SerializeField] private LayerMask _enemyLayer;
+    [SerializeField] private LayerMask _wallAndEnvironmentLayer;
 
     private Rigidbody2D _rb;
-    private Collider2D _collider; // 물리-트리거 스위칭용
+    private Collider2D _collider;
     private WeaponMovement _movement;
     private WeaponCombat _combat;
     private WeaponSensor _sensor;
@@ -36,8 +35,10 @@ public class WeaponController : MonoBehaviour
     private WeaponState _currentState = WeaponState.Grounded;
     private bool _isAttacking = false;
     private bool _isThrustAiming = false;
+    private bool _isTimeSlowed = false;
+    private Vector2 _fixedAimPos;
+    private Vector2 _mouseStartPos;
     private Camera _mainCamera;
-    private float _mouseCaptureMaintainRadius;
 
     private void Awake()
     {
@@ -55,15 +56,11 @@ public class WeaponController : MonoBehaviour
             if (playerObject != null) _playerTransform = playerObject.transform;
         }
 
-        _mouseCaptureMaintainRadius = _mouseCaptureRadius * 1.2f;
-
-        // 모듈 초기화
-        _sensor.Configure(_playerTransform, _mainCamera, _controlRadius, _mouseCaptureRadius, _mouseCaptureMaintainRadius, _breakMouseSpeed);
+        _sensor.Configure(_playerTransform, _mainCamera, _controlRadius, 0f, 0f, 0f);
         _combat.Configure(_enemyLayer);
-        _view.Configure(_sensor.GetPlayerTransform(), _controlRadius, _mouseCaptureRadius, _mouseCaptureMaintainRadius, _slashRadius);
+        _view.Configure(_sensor.GetPlayerTransform(), _controlRadius, 0f, 0f, _slashRadius);
         _movement.CacheRigidbody(_rb);
 
-        // [핵심] 시작 상태 설정 (isTrigger = false 로직 포함)
         ChangeState(WeaponState.Grounded);
     }
 
@@ -85,29 +82,30 @@ public class WeaponController : MonoBehaviour
     private void Update()
     {
         Vector2 mouseWorldPos = _sensor.GetMouseWorldPosition();
+        bool showConnectionLine = _currentState == WeaponState.Controlled;
+
+        _view.RenderConnectionLine(_playerTransform.position, transform.position, showConnectionLine);
 
         if (_isThrustAiming)
         {
-            Vector2 dir = (mouseWorldPos - (Vector2)transform.position).normalized;
+            Vector2 dir = mouseWorldPos - (Vector2)transform.position;
             if (dir.sqrMagnitude > 0f)
             {
                 transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg);
             }
         }
 
-        // 1. 조준선 표시 로직
         if (_isThrustAiming && _currentState == WeaponState.Controlled)
             _view.ShowTrajectory(transform.position, mouseWorldPos);
         else
             _view.HideTrajectory();
 
-        // 2. 상태 전환 트리거 (Sensor 모듈 위임)
-        if (_currentState == WeaponState.Grounded)
+        if (!_isAttacking && _currentState == WeaponState.Grounded)
         {
             if (_sensor.ShouldAcquireControl(transform.position, mouseWorldPos))
                 ChangeState(WeaponState.Controlled);
         }
-        else if (_currentState == WeaponState.Controlled && !_isAttacking)
+        else if (!_isAttacking && _currentState == WeaponState.Controlled)
         {
             if (_sensor.ShouldReleaseControl(transform.position, mouseWorldPos))
                 ChangeState(WeaponState.Grounded);
@@ -116,8 +114,19 @@ public class WeaponController : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if ((_currentState == WeaponState.Controlled || _currentState == WeaponState.Slashing) && !_isThrustAiming)
+        if (_isThrustAiming && _currentState == WeaponState.Controlled)
+        {
+            _rb.MovePosition(_fixedAimPos);
+            return;
+        }
+
+        bool isMobileState = _currentState == WeaponState.Controlled || _currentState == WeaponState.Slashing;
+        bool isThrusting = _currentState == WeaponState.Thrusting;
+
+        if (isMobileState && !isThrusting && !_isThrustAiming)
+        {
             _movement.FollowMouseHover(_sensor.GetMouseWorldPosition(), _followSmoothTime);
+        }
     }
 
     private void ChangeState(WeaponState newState)
@@ -128,14 +137,18 @@ public class WeaponController : MonoBehaviour
         _currentState = newState;
         EventBus.Instance?.Publish(new WeaponStateChangeEvent { NewState = _currentState });
 
+        bool isGrounded = _currentState == WeaponState.Grounded;
+        UpdateCollisionInteractions(isGrounded);
+
         switch (_currentState)
         {
             case WeaponState.Grounded:
                 _rb.bodyType = RigidbodyType2D.Dynamic;
-                _collider.isTrigger = false; // [핵심] 바닥에 충돌 가능하게 변경
+                _collider.isTrigger = false;
                 _movement.TransferVelocityToPhysics();
                 _isAttacking = false;
                 _isThrustAiming = false;
+                _isTimeSlowed = false;
                 _view.HideTrajectory();
                 break;
 
@@ -143,9 +156,19 @@ public class WeaponController : MonoBehaviour
             case WeaponState.Slashing:
             case WeaponState.Thrusting:
                 _rb.bodyType = RigidbodyType2D.Kinematic;
-                _collider.isTrigger = true; // [핵심] 조종/공격 시엔 모든 것을 통과(트리거)
+                _collider.isTrigger = true;
                 break;
         }
+    }
+
+    private void UpdateCollisionInteractions(bool grounded)
+    {
+        int weaponLayer = gameObject.layer;
+        int enemyLayer = LayerMask.NameToLayer("Enemy");
+        int environmentLayer = LayerMask.NameToLayer("Environment");
+
+        if (enemyLayer >= 0) Physics2D.IgnoreLayerCollision(weaponLayer, enemyLayer, !grounded);
+        if (environmentLayer >= 0) Physics2D.IgnoreLayerCollision(weaponLayer, environmentLayer, !grounded);
     }
 
     #region [Combat: Slash & Thrust]
@@ -178,56 +201,73 @@ public class WeaponController : MonoBehaviour
 
     private void OnSecondaryAttack(SecondaryAttackEvent evt)
     {
-        Debug.Log($"Secondary Attack Event Received: {evt.IsStarted}, Current State: {_currentState}");
         if (_currentState != WeaponState.Controlled || _isAttacking) return;
 
         if (evt.IsStarted)
         {
+            _fixedAimPos = transform.position;
+            _mouseStartPos = _sensor.GetMouseWorldPosition();
             _isThrustAiming = true;
-            Time.timeScale = _slowMotionScale; // 경고 해결: 고정값 0.2f 대신 변수 사용
-            Time.fixedDeltaTime = 0.02f * Time.timeScale;
+            _movement.StopFollow();
+            ApplySlowMotion();
         }
         else
         {
+            Vector2 mouseWorldPos = _sensor.GetMouseWorldPosition();
+            float dragDistance = Vector2.Distance(_mouseStartPos, mouseWorldPos);
+
             _isThrustAiming = false;
             _view.HideTrajectory();
             ResetTimeScale();
-            Vector2 mousePos = _sensor.GetMouseWorldPosition();
-            Vector2 fixedWeaponPosition = transform.position;
-            Vector2 direction = (mousePos - fixedWeaponPosition).normalized;
+
+            if (dragDistance < 0.5f)
+            {
+                ChangeState(WeaponState.Controlled);
+                return;
+            }
+
+            Vector2 direction = (mouseWorldPos - _fixedAimPos).normalized;
             StartCoroutine(ThrustRoutine(direction));
         }
     }
 
     private IEnumerator ThrustRoutine(Vector2 direction)
     {
-        _isAttacking = true;
         ChangeState(WeaponState.Thrusting);
+        _isAttacking = true;
 
-        float traveledDistance = 0f;
-        float maxThrustDist = _controlRadius * 1.5f;
-        HashSet<IDamageable> hitTargets = new HashSet<IDamageable>();
-        int wallMask = LayerMask.GetMask("Wall", "Environment");
-
-        while (traveledDistance < maxThrustDist)
+        if (direction.sqrMagnitude <= 0f)
         {
-            Vector2 moveStep = direction * _thrustSpeed * Time.deltaTime;
+            ChangeState(WeaponState.Grounded);
+            _isAttacking = false;
+            yield break;
+        }
 
-            if (wallMask != 0)
+        HashSet<IDamageable> hitTargets = new HashSet<IDamageable>();
+        Vector2 thrustDirection = direction.normalized;
+        float thrustSpeed = _thrustSpeed;
+        int wallMask = _wallAndEnvironmentLayer.value != 0 ? _wallAndEnvironmentLayer.value : LayerMask.GetMask("Ground", "Wall", "Ceiling");
+
+        while (true)
+        {
+            yield return new WaitForFixedUpdate();
+
+            float moveDistance = thrustSpeed * Time.fixedDeltaTime;
+            RaycastHit2D wallHit = Physics2D.Raycast(transform.position, thrustDirection, moveDistance, wallMask);
+            if (wallHit.collider != null)
             {
-                RaycastHit2D wallHit = Physics2D.Raycast(transform.position, direction, moveStep.magnitude, wallMask);
-                if (wallHit.collider != null)
-                {
-                    break;
-                }
+                _movement.MoveThrust(thrustDirection * wallHit.distance);
+                ChangeState(WeaponState.Grounded);
+                _isAttacking = false;
+                yield break;
             }
 
-            _movement.MoveThrust(moveStep);
-            traveledDistance += moveStep.magnitude;
-
+            _movement.MoveThrust(thrustDirection * moveDistance);
             _combat.PerformThrustDamage(transform.position, _thrustRadius, _thrustDamage, hitTargets);
 
-            if (!_sensor.IsPlayerInRange(transform.position)) break;
+            if (!_sensor.IsPlayerInRange(transform.position))
+                break;
+
             yield return null;
         }
 
@@ -235,7 +275,23 @@ public class WeaponController : MonoBehaviour
         _isAttacking = false;
     }
 
-    private void ResetTimeScale() { Time.timeScale = 1.0f; Time.fixedDeltaTime = 0.02f; }
+    private void ApplySlowMotion()
+    {
+        if (_isTimeSlowed) return;
+
+        _isTimeSlowed = true;
+        Time.timeScale = _slowMotionScale;
+        Time.fixedDeltaTime = 0.02f * Time.timeScale;
+    }
+
+    private void ResetTimeScale()
+    {
+        if (!_isTimeSlowed && Time.timeScale == 1f) return;
+
+        _isTimeSlowed = false;
+        Time.timeScale = 1.0f;
+        Time.fixedDeltaTime = 0.02f;
+    }
     #endregion
 
     private void OnDrawGizmos()
