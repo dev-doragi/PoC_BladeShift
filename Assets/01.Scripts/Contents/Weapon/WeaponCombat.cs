@@ -144,6 +144,10 @@ public class WeaponCombat : MonoBehaviour
             if (!col.TryGetComponent<EnemyBase>(out var other) || other.IsDead)
                 continue;
             Vector2 dir = ((Vector2)col.transform.position - (Vector2)position).normalized;
+            float angleOffset = Random.Range(-8f, 8f) * Mathf.Deg2Rad;
+            Vector2 knockbackDir = new Vector2(
+                dir.x * Mathf.Cos(angleOffset) - dir.y * Mathf.Sin(angleOffset),
+                dir.x * Mathf.Sin(angleOffset) + dir.y * Mathf.Cos(angleOffset));
             if (pinnedTargets != null && pinnedTargets.Contains(col.transform))
             {
                 other.TakeDamage(new DamageData
@@ -151,7 +155,7 @@ public class WeaponCombat : MonoBehaviour
                     Damage = 9999f,
                     AttackerTeam = TeamType.Player,
                     HitPoint = col.ClosestPoint(position),
-                    KnockbackForce = dir * _knockbackPower * 10f,
+                    KnockbackForce = knockbackDir * _knockbackPower * 10f,
                     IsPiercing = true
                 });
             }
@@ -162,7 +166,7 @@ public class WeaponCombat : MonoBehaviour
                     Damage = _slashDamage,
                     AttackerTeam = TeamType.Player,
                     HitPoint = col.ClosestPoint(position),
-                    KnockbackForce = dir * _knockbackPower * 5f,
+                    KnockbackForce = knockbackDir * _knockbackPower * 5f,
                     IsPiercing = false
                 });
             }
