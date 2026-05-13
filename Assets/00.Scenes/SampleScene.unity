@@ -556,7 +556,7 @@ MonoBehaviour:
   _zoomStep: 2
   _minZoom: 3
   _maxZoom: 15
-  _cineCam: {fileID: 1657171136}
+  _impulseSource: {fileID: 0}
 --- !u!114 &519420034
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -613,7 +613,7 @@ MonoBehaviour:
     ImpulseDuration: 0.2
     ImpulseType: 3
     DissipationRate: 0.25
-    RawSignal: {fileID: 0}
+    RawSignal: {fileID: 11400000, guid: 1faa6f25cc52c1343b7e63b06ad2eb04, type: 2}
     AmplitudeGain: 1
     FrequencyGain: 1
     RepeatMode: 0

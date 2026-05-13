@@ -297,6 +297,7 @@ public class WeaponController : MonoBehaviour
         _isThrustAiming = false;
         _view.HideTrajectory();
         ResetTimeScale();
+        EventBus.Instance?.Publish(new HitStopEvent { Duration = 0.15f });
         _hitTargets.Clear();
         ChangeState(WeaponState.PinningFlight);
         _isAttacking = true;
