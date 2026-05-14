@@ -1,11 +1,11 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-[RequireComponent(typeof(Rigidbody2D), typeof(Collider2D))]
-[RequireComponent(typeof(WeaponMovement), typeof(WeaponCombat))]
-[RequireComponent(typeof(WeaponSensor), typeof(WeaponView))]
+ [RequireComponent(typeof(Rigidbody2D), typeof(Collider2D))]
+ [RequireComponent(typeof(WeaponMovement), typeof(WeaponCombat))]
+ [RequireComponent(typeof(WeaponSensor), typeof(WeaponView))]
+ [RequireComponent(typeof(WeaponCapture))]
 public class WeaponController : MonoBehaviour
 {
     [Header("1. Dual-Radius Settings")]
@@ -23,7 +23,7 @@ public class WeaponController : MonoBehaviour
     private WeaponSensor _sensor;
     private WeaponView _view;
     private HashSet<IDamageable> _hitTargets = new HashSet<IDamageable>();
-    private List<EnemyBase> _capturedEnemies = new List<EnemyBase>();
+    private WeaponCapture _capture;
     private PlayerController _playerController;
     private float _controlRadius;
 
@@ -46,6 +46,7 @@ public class WeaponController : MonoBehaviour
         _view = GetComponent<WeaponView>();
         _mainCamera = Camera.main;
         _originalScale = transform.localScale;
+        _capture = GetComponent<WeaponCapture>();
 
         if (_playerTransform == null)
         {
@@ -141,7 +142,7 @@ public class WeaponController : MonoBehaviour
         }
 
 
-        bool hasEnemy = _capturedEnemies.Count > 0;
+        bool hasEnemy = _capture.GetCapturedEnemies().Count > 0;
 
 
         bool canHover = _currentState == WeaponState.Controlled || 
@@ -211,23 +212,26 @@ public class WeaponController : MonoBehaviour
     {
         if (_isThrustAiming) return;
 
-        if (_currentState == WeaponState.Pinned && evt.IsStarted)
+        if (_currentState == WeaponState.Pinned)
         {
-            if (!_sensor.IsPlayerInRange(transform.position)) return;
+            if (_isAttacking) return; // 방어 코드: 피니셔 연출 중 중복 입력 차단
 
-            bool hasVictim = _capturedEnemies.Count > 0;
-
-
-            if (hasVictim)
+            if (evt.IsStarted)
             {
-                ExecuteSpinFinisher();
-            }
-            else
-            {
+                if (!_sensor.IsPlayerInRange(transform.position)) return;
 
-                UnpinAndReturn(); 
+                bool hasVictim = _capture.GetCapturedEnemies().Count > 0;
+
+                if (hasVictim)
+                {
+                    ExecuteSpinFinisher();
+                }
+                else
+                {
+                    UnpinAndReturn(); 
+                }
+                return;
             }
-            return;
         }
 
         if (evt.IsStarted)
@@ -247,20 +251,22 @@ public class WeaponController : MonoBehaviour
     {
         if (evt.IsStarted)
         {
-            if (_currentState == WeaponState.Pinned)
-            {
-                if (!_sensor.IsPlayerInRange(transform.position)) return;
+        if (_currentState == WeaponState.Pinned)
+        {
+            if (_isAttacking) return; // 방어 코드: 피니셔 연출 중 중복 입력 차단
 
-                if (_capturedEnemies.Count > 0)
-                {
-                    ExecuteSpinFinisher();
-                }
-                else
-                {
-                    UnpinAndReturn();
-                }
-                return;
+            if (!_sensor.IsPlayerInRange(transform.position)) return;
+
+            if (_capture.GetCapturedEnemies().Count > 0)
+            {
+                ExecuteSpinFinisher();
             }
+            else
+            {
+                UnpinAndReturn();
+            }
+            return;
+        }
 
             if (_currentState != WeaponState.Controlled || _isAttacking) return;
 
@@ -307,15 +313,7 @@ public class WeaponController : MonoBehaviour
             if (!_combat.PerformPinDamage(targetTransform, transform.position, direction, _hitTargets)) return false;
             if (targetTransform != null)
             {
-                targetTransform.SetParent(transform); 
-                if (targetTransform.TryGetComponent<EnemyBase>(out var enemy))
-                {
-                    if (!_capturedEnemies.Contains(enemy))
-                    {
-                        _capturedEnemies.Add(enemy);
-                    }
-                }
-                if (targetTransform.TryGetComponent<Rigidbody2D>(out var eb)) eb.bodyType = RigidbodyType2D.Kinematic;
+                _capture.BindEnemy(targetTransform);
             }
             return false;
         }, 
@@ -329,14 +327,7 @@ public class WeaponController : MonoBehaviour
 
     private void UnpinAndReturn()
     {
-        foreach (var enemy in _capturedEnemies)
-        {
-            if (enemy != null)
-            {
-                enemy.transform.SetParent(null);
-            }
-        }
-        _capturedEnemies.Clear();
+        _capture.UnbindAll();
         transform.SetParent(null);
         transform.localScale = _originalScale;
         transform.rotation = Quaternion.Euler(0f, 0f, transform.eulerAngles.z);
@@ -386,13 +377,12 @@ public class WeaponController : MonoBehaviour
         Vector2 pivot = _sensor.GetMouseWorldPosition();
         float radius = Vector2.Distance(pivot, transform.position);
         radius = Mathf.Max(radius, _combat.SlashRadius * 1.8f);
-        List<Transform> pinnedTargets = new List<Transform>(_capturedEnemies.Count);
-        foreach (var enemy in _capturedEnemies)
+        var captured = _capture.GetCapturedEnemies();
+        List<Transform> pinnedTargets = new List<Transform>(captured.Count);
+        foreach (var enemy in captured)
         {
             if (enemy != null)
-            {
                 pinnedTargets.Add(enemy.transform);
-            }
         }
 
         _movement.ExecuteOrbitFinisher(
@@ -402,14 +392,7 @@ public class WeaponController : MonoBehaviour
             () =>
             {
                 _combat.PerformSpinFinisher(transform.position, pinnedTargets);
-                foreach (var enemy in _capturedEnemies)
-                {
-                    if (enemy != null)
-                    {
-                        enemy.transform.SetParent(null);
-                    }
-                }
-                _capturedEnemies.Clear();
+                _capture.UnbindAll();
             },
             () =>
             {

@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class WeaponMovement : MonoBehaviour
@@ -121,11 +122,58 @@ public class WeaponMovement : MonoBehaviour
                 break;
             }
 
-            RaycastHit2D hit = Physics2D.Raycast(currentPos, flightDirection, moveDistance, wallLayerMask);
-            if (hit.collider != null)
+            RaycastHit2D wallHit = Physics2D.Raycast(currentPos, flightDirection, moveDistance, wallLayerMask);
+            bool hasWallHit = wallHit.collider != null;
+            float actualMoveDist = hasWallHit ? wallHit.distance : moveDistance;
+
+            if (onCheckTarget != null)
             {
-                _rb.MovePosition(hit.point);
-                onPinned?.Invoke(hit.transform);
+                var sweepTargets = new List<(Transform target, float distance)>();
+                var uniqueTargets = new HashSet<Transform>();
+
+                Collider2D[] overlapTargets = Physics2D.OverlapCircleAll(currentPos, _weaponRadius, enemyLayerMask);
+                for (int i = 0; i < overlapTargets.Length; i++)
+                {
+                    Collider2D target = overlapTargets[i];
+                    if (target == null) continue;
+
+                    Transform targetTransform = target.transform;
+                    if (!uniqueTargets.Add(targetTransform)) continue;
+                    sweepTargets.Add((targetTransform, 0f));
+                }
+
+                if (actualMoveDist > 0.0001f)
+                {
+                    RaycastHit2D[] castHits = Physics2D.CircleCastAll(currentPos, _weaponRadius, flightDirection, actualMoveDist, enemyLayerMask);
+                    for (int i = 0; i < castHits.Length; i++)
+                    {
+                        Collider2D hitCollider = castHits[i].collider;
+                        if (hitCollider == null) continue;
+
+                        Transform targetTransform = hitCollider.transform;
+                        if (!uniqueTargets.Add(targetTransform)) continue;
+                        sweepTargets.Add((targetTransform, castHits[i].distance));
+                    }
+                }
+
+                if (sweepTargets.Count > 1)
+                {
+                    sweepTargets.Sort((a, b) => a.distance.CompareTo(b.distance));
+                }
+
+                for (int i = 0; i < sweepTargets.Count; i++)
+                {
+                    if (onCheckTarget(sweepTargets[i].target))
+                    {
+                        yield break;
+                    }
+                }
+            }
+
+            if (hasWallHit)
+            {
+                _rb.MovePosition(wallHit.point);
+                onPinned?.Invoke(wallHit.transform);
                 yield break;
             }
 
