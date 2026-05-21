@@ -1471,6 +1471,7 @@ GameObject:
   - component: {fileID: 2068518544}
   - component: {fileID: 2068518543}
   - component: {fileID: 2068518549}
+  - component: {fileID: 2068518550}
   - component: {fileID: 2068518548}
   - component: {fileID: 2068518547}
   - component: {fileID: 2068518546}
@@ -1658,6 +1659,18 @@ MonoBehaviour:
   _pinDamage: 30
   _spinSpeed: 2500
   _pinSpeed: 150
+--- !u!114 &2068518550
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2068518540}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0caef6ba42d000c40a072204f09d138e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WeaponCapture
 --- !u!1 &2069730400
 GameObject:
   m_ObjectHideFlags: 0
